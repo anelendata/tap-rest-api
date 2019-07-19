@@ -1,4 +1,6 @@
-# tap-woocommerce
+# tap-rest-api
+
+A configurable REST API tap.
 
 This is a [Singer](https://singer.io) tap that produces JSON-formatted data
 following the [Singer
