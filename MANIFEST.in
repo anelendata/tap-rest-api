@@ -1,0 +1,1 @@
+include tap_rest_api/schemas/*.json
