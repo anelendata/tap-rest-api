@@ -13,7 +13,8 @@ SPEC_FILE = "./tap_rest_api_spec.json"
 SPEC = {}
 TYPES = {
     "string": str,
-    "datetime": str
+    "datetime": str,
+    "integer": int
     }
 
 REQUIRED_CONFIG_KEYS = []
@@ -21,7 +22,7 @@ REQUIRED_CONFIG_KEYS = []
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"items_per_page": 100}
+CONFIG = {"schema_dir": "../../schema", "items_per_page": 100}
 
 ENDPOINTS = {}
 
@@ -49,8 +50,9 @@ def get_endpoint(endpoint, kwargs):
 def get_start(STATE, tap_stream_id, bookmark_key):
     current_bookmark = singer.get_bookmark(STATE, tap_stream_id, bookmark_key)
     if current_bookmark is None:
-        # TODO: Want to be able to choose the index key
-        return CONFIG["start_datetime"]
+        current_bookmark = CONFIG.get("start_datetime", CONFIG.get("start_index"))
+        if current_bookmark is None:
+            raise KeyError("Neither start_datetime or start_index is set.")
     return current_bookmark
 
 
@@ -158,6 +160,20 @@ def gen_request(stream_id, url):
         return resp.json()
 
 
+def get_last_update(record, current):
+    last_update = current
+    if CONFIG.get("datetime_key"):
+        key = CONFIG["datetime_key"]
+        if(key in record) and (parser.parse(record[key]) > parser.parse(current)):
+            last_update = record[key]
+    elif CONFIG.get("index_key"):
+        key = CONFIG["index_key"]
+        if(key in record) and record[key] > current:
+            last_update = record[key]
+    else:
+        raise KeyError("Neither datetime_key or index_key is set")
+    return last_update
+
 def sync_rows(STATE, catalog, schema_name, key_properties=[]):
     schema = load_schema(schema_name)
     singer.write_schema(schema_name, schema, key_properties)
@@ -166,10 +182,12 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[]):
     LOGGER.info("Only syncing %s updated since %s" % (schema_name, start))
     last_update = start
     page_number = 1
+    offset_number = 0  # Offset is the number of records (vs. page)
     with metrics.record_counter(schema_name) as counter:
         while True:
             params = CONFIG
             params.update({"current_page": page_number})
+            params.update({"current_offset": offset_number})
             endpoint = get_endpoint(schema_name, params)
             LOGGER.info("GET %s", endpoint)
             rows = gen_request(schema_name,endpoint)
@@ -178,17 +196,13 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[]):
                 row = filter_result(row, schema)
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = time.time()
-
-                # TODO: Want to choose non-datetime key for the indexing
-                datetime_key = CONFIG["datetime_key"]
-                if(datetime_key in row) and (parser.parse(row[datetime_key]) > parser.parse(last_update)):
-                    last_update = row[datetime_key]
-
+                last_update = get_last_update(row, last_update)
                 singer.write_record(schema_name, row)
             if len(rows) < 100:
                 break
             else:
                 page_number +=1
+                offset_number += len(rows)
 
     STATE = singer.write_bookmark(STATE, schema_name, 'last_update', last_update)
     singer.write_state(STATE)
@@ -313,6 +327,12 @@ def parse_args(spec_file, required_config_keys):
         required=True)
 
     parser.add_argument(
+        "--schema_dir",
+        type=str,
+        help="Full path to the schema directory.",
+        required=True)
+
+    parser.add_argument(
         '-s', '--state',
         help='State file')
 
@@ -324,11 +344,6 @@ def parse_args(spec_file, required_config_keys):
         '-d', '--discover',
         action='store_true',
         help='Do schema discovery')
-
-    parser.add_argument(
-        "--schema_dir",
-        type=str,
-        help="Full path to the schema directory.")
 
     parser.add_argument(
         "--url",
@@ -368,8 +383,8 @@ def main():
     #     CONFIG["end_datetime"]  = datetime.datetime.utcnow().isoformat()
 
     STATE = {}
-    tap_stream_id = CONFIG["tap_stream_id"]
     schema = CONFIG["schema"]
+    tap_stream_id = CONFIG.get("tap_stream_id", CONFIG["schema"])
 
     # TODO: support multiple streams
     STREAMS[schema] = [Stream(schema, CONFIG)]
