@@ -274,7 +274,7 @@ def do_discover():
     json.dump(discover_schemas(CONFIG["schema"]), sys.stdout, indent=4)
 
 
-def parse_args(required_config_keys):
+def parse_args(spec_file, required_config_keys):
     ''' This is to replace singer's default utils.parse_args()
     https://github.com/singer-io/singer-python/blob/master/singer/utils.py
 
@@ -290,11 +290,12 @@ def parse_args(required_config_keys):
     load and parse the JSON file.
     '''
     # Read spec file
-    with open(SPEC_FILE, "r") as f:
+    with open(spec_file, "r") as f:
         content = f.read()
     SPEC.update(json.loads(content))
 
     parser = argparse.ArgumentParser(SPEC["application"])
+    parser.add_argument("spec_file", type=str, help="Specification file")
 
     # Capture additional args
     for arg in SPEC["args"].keys():
@@ -352,7 +353,8 @@ def parse_args(required_config_keys):
 @utils.handle_top_exception(LOGGER)
 def main():
     '''Entry point'''
-    args = parse_args(REQUIRED_CONFIG_KEYS)
+    spec_file = sys.argv[1]
+    args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
     CONFIG.update(args.config)
 
     # Overwrite config specs with commandline args if present
