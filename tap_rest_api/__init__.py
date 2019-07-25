@@ -198,7 +198,8 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[]):
                     row["_etl_tstamp"] = time.time()
                 last_update = get_last_update(row, last_update)
                 singer.write_record(schema_name, row)
-            if len(rows) < 100:
+            if len(rows) == 0:
+            # if len(rows) < CONFIG["items_per_page"]:
                 break
             else:
                 page_number +=1
@@ -206,7 +207,6 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[]):
 
     STATE = singer.write_bookmark(STATE, schema_name, 'last_update', last_update)
     singer.write_state(STATE)
-    LOGGER.info("Completed %s Sync" % schema_name)
     return STATE
 
 
@@ -238,6 +238,7 @@ def get_selected_streams(remaining_streams, annotated_schema):
 
 def do_sync(STATE, catalogs, schema):
     '''Sync the streams that were selected'''
+    start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(STREAMS[schema], STATE)
     selected_streams = get_selected_streams(remaining_streams, catalogs)
     if len(selected_streams) < 1:
@@ -257,6 +258,10 @@ def do_sync(STATE, catalogs, schema):
         except Exception as e:
             LOGGER.critical(e)
             raise e
+
+    end_process_at = datetime.datetime.now()
+    LOGGER.info("Completed sync at %s" % str(end_process_at))
+    LOGGER.info("Process duration: " + str(end_process_at - start_process_at))
 
 
 def get_abs_path(path):
