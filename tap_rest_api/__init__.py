@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from requests.auth import HTTPBasicAuth
+from requests.auth import HTTPBasicAuth, HTTPDigestAuth
+# from requests_ntlm import HTTPNtlmAuth
 from dateutil import parser
 import argparse, attr, backoff, datetime, itertools, json, os, pytz, requests, sys, time, urllib
 
@@ -22,7 +23,7 @@ REQUIRED_CONFIG_KEYS = []
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"schema_dir": "../../schema", "items_per_page": 100}
+CONFIG = {"schema_dir": "../../schema", "items_per_page": 100, "auth_method": "basic"}
 
 ENDPOINTS = {}
 
@@ -149,12 +150,23 @@ def giveup(exc):
 
 @utils.backoff((backoff.expo,requests.exceptions.RequestException), giveup)
 @utils.ratelimit(20, 1)
-def gen_request(stream_id, url):
+def gen_request(stream_id, url, auth_method="basic"):
+    if auth_method == "basic":
+        auth=HTTPBasicAuth(CONFIG["username"], CONFIG["password"])
+    elif auth_method == "digest":
+        auth=HTTPDigestAuth(CONFIG["username"], CONFIG["password"])
+    elif auth_method == "ntlm":
+        auth=HTTPNtlmAuth(CONFIG["username"], CONFIG["password"])
+    else:
+        raise ValueError("Unknown auth method: " + auth)
+
+    LOGGER.info("Using %s authentication method." % auth_method)
+
     with metrics.http_request_timer(stream_id) as timer:
         headers = { 'User-Agent': USER_AGENT }
         resp = requests.get(url,
                 headers=headers,
-                auth=HTTPBasicAuth(CONFIG["username"], CONFIG["password"]))
+                auth=auth)
         timer.tags[metrics.Tag.http_status_code] = resp.status_code
         resp.raise_for_status()
         return resp.json()
@@ -174,7 +186,7 @@ def get_last_update(record, current):
         raise KeyError("Neither datetime_key or index_key is set")
     return last_update
 
-def sync_rows(STATE, catalog, schema_name, key_properties=[]):
+def sync_rows(STATE, catalog, schema_name, key_properties=[], auth_method="basic"):
     schema = load_schema(schema_name)
     singer.write_schema(schema_name, schema, key_properties)
 
@@ -190,7 +202,7 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[]):
             params.update({"current_offset": offset_number})
             endpoint = get_endpoint(schema_name, params)
             LOGGER.info("GET %s", endpoint)
-            rows = gen_request(schema_name,endpoint)
+            rows = gen_request(schema_name, endpoint, auth_method)
             for row in rows:
                 counter.increment()
                 row = filter_result(row, schema)
@@ -236,7 +248,7 @@ def get_selected_streams(remaining_streams, annotated_schema):
     return selected_streams
 
 
-def do_sync(STATE, catalogs, schema):
+def do_sync(STATE, catalogs, schema, auth_method="basic"):
     '''Sync the streams that were selected'''
     start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(STREAMS[schema], STATE)
@@ -254,7 +266,7 @@ def do_sync(STATE, catalogs, schema):
 
         try:
             catalog = [cat for cat in catalogs.streams if cat.stream == stream.tap_stream_id][0]
-            STATE = sync_rows(STATE, catalog, stream.tap_stream_id)
+            STATE = sync_rows(STATE, catalog, stream.tap_stream_id, auth_method=auth_method)
         except Exception as e:
             LOGGER.critical(e)
             raise e
@@ -390,6 +402,8 @@ def main():
     STATE = {}
     schema = CONFIG["schema"]
     tap_stream_id = CONFIG.get("tap_stream_id", CONFIG["schema"])
+    auth_method = CONFIG.get("auth_method", "basic")
+    LOGGER.info("auth_method=%s" % auth_method)
 
     # TODO: support multiple streams
     STREAMS[schema] = [Stream(schema, CONFIG)]
@@ -399,7 +413,7 @@ def main():
     if args.discover:
         do_discover()
     elif args.catalog:
-        do_sync(STATE, args.catalog, schema)
+        do_sync(STATE, args.catalog, schema, auth_method)
     else:
         LOGGER.info("No Streams were selected")
 
