@@ -2,6 +2,7 @@
 
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 # from requests_ntlm import HTTPNtlmAuth
+
 from dateutil import parser
 import argparse, attr, backoff, datetime, itertools, json, os, pytz, requests, sys, time, urllib
 
@@ -23,8 +24,7 @@ REQUIRED_CONFIG_KEYS = []
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"schema_dir": "../../schema", "items_per_page": 100, "auth_method": "basic"}
-
+CONFIG = {"schema_dir": "../../schema", "items_per_page": 100, "max_page": None, "auth_method": "basic"}
 ENDPOINTS = {}
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36 '
@@ -180,13 +180,15 @@ def get_last_update(record, current):
             last_update = record[key]
     elif CONFIG.get("index_key"):
         key = CONFIG["index_key"]
-        if(key in record) and record[key] > current:
+        if(key in record) and (not current or record[key] > current):
             last_update = record[key]
+        else:
+            KeyError("index_key not found in the record")
     else:
         raise KeyError("Neither datetime_key or index_key is set")
     return last_update
 
-def sync_rows(STATE, catalog, schema_name, key_properties=[], auth_method="basic"):
+def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, auth_method="basic"):
     schema = load_schema(schema_name)
     singer.write_schema(schema_name, schema, key_properties)
 
@@ -210,7 +212,7 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], auth_method="basic
                     row["_etl_tstamp"] = time.time()
                 last_update = get_last_update(row, last_update)
                 singer.write_record(schema_name, row)
-            if len(rows) == 0:
+            if len(rows) == 0 or (max_page and page_number + 1 > max_page):
             # if len(rows) < CONFIG["items_per_page"]:
                 break
             else:
@@ -248,7 +250,7 @@ def get_selected_streams(remaining_streams, annotated_schema):
     return selected_streams
 
 
-def do_sync(STATE, catalogs, schema, auth_method="basic"):
+def do_sync(STATE, catalogs, schema, max_page=None, auth_method="basic"):
     '''Sync the streams that were selected'''
     start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(STREAMS[schema], STATE)
@@ -266,7 +268,7 @@ def do_sync(STATE, catalogs, schema, auth_method="basic"):
 
         try:
             catalog = [cat for cat in catalogs.streams if cat.stream == stream.tap_stream_id][0]
-            STATE = sync_rows(STATE, catalog, stream.tap_stream_id, auth_method=auth_method)
+            STATE = sync_rows(STATE, catalog, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
         except Exception as e:
             LOGGER.critical(e)
             raise e
@@ -403,6 +405,7 @@ def main():
     schema = CONFIG["schema"]
     tap_stream_id = CONFIG.get("tap_stream_id", CONFIG["schema"])
     auth_method = CONFIG.get("auth_method", "basic")
+    max_page = CONFIG.get("max_page")
     LOGGER.info("auth_method=%s" % auth_method)
 
     # TODO: support multiple streams
@@ -413,7 +416,7 @@ def main():
     if args.discover:
         do_discover()
     elif args.catalog:
-        do_sync(STATE, args.catalog, schema, auth_method)
+        do_sync(STATE, args.catalog, schema, max_page, auth_method)
     else:
         LOGGER.info("No Streams were selected")
 
