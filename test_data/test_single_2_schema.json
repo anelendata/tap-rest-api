@@ -1,0 +1,99 @@
+{
+    "type": "object",
+    "properties": {
+        "a": {
+            "type": [
+                "null",
+                "number"
+            ]
+        },
+        "b": {
+            "type": [
+                "null",
+                "number"
+            ]
+        },
+        "c": {
+            "type": [
+                "null",
+                "number"
+            ]
+        },
+        "d": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "e": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "f": {
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        "g": {
+            "type": [
+                "null",
+                "object"
+            ],
+            "properties": {
+                "a": {
+                    "type": [
+                        "null",
+                        "integer"
+                    ]
+                },
+                "b": {
+                    "type": [
+                        "null",
+                        "number"
+                    ]
+                },
+                "c": {
+                    "type": [
+                        "null",
+                        "number"
+                    ]
+                },
+                "d": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "format": "date-time"
+                },
+                "e": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "format": "date-time"
+                },
+                "f": {
+                    "type": [
+                        "null",
+                        "string"
+                    ]
+                }
+            }
+        },
+        "h": {
+            "type": [
+                "null",
+                "array"
+            ],
+            "items": {
+                "type": [
+                    "null",
+                    "integer"
+                ]
+            }
+        }
+    }
+}

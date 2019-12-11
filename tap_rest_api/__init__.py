@@ -11,6 +11,9 @@ from singer import utils
 from singer.catalog import Catalog
 import singer.metrics as metrics
 
+from .json2schema import infer_schema
+
+
 SPEC_FILE = "./tap_rest_api_spec.json"
 SPEC = {}
 TYPES = {
@@ -59,7 +62,8 @@ def get_start(STATE, tap_stream_id, bookmark_key):
 
 def load_schema(entity):
     '''Returns the schema for the specified source'''
-    schema = utils.load_json(get_abs_path(CONFIG["schema_dir"] + "/{}.json".format(entity)))
+    schema = utils.load_json(os.path.join(CONFIG["schema_dir"], "{}.json".format(entity)))
+    # schema = utils.load_json(get_abs_path(CONFIG["schema_dir"] + "/{}.json".format(entity)))
 
     return schema
 
@@ -308,6 +312,32 @@ def do_discover():
     json.dump(discover_schemas(CONFIG["schema"]), sys.stdout, indent=4)
 
 
+def do_infer_schema(out_catalog=True, add_tstamp=True):
+    params = CONFIG
+    page_number = 0
+    offset_number = 0
+    params.update({"current_page": page_number})
+    params.update({"current_offset": offset_number})
+    schema_name = CONFIG["schema"]
+    endpoint = get_endpoint(schema_name, params)
+    LOGGER.info("GET %s", endpoint)
+    auth_method = CONFIG.get("auth_method", "basic")
+    data = gen_request(schema_name, endpoint, auth_method)
+    schema = infer_schema(data)
+    if add_tstamp:
+        schema["properties"]["_etl_tstamp"] = {"type": ["null", "number"]}
+    with open(os.path.join(CONFIG["schema_dir"], "schema.json"), "w") as f:
+        json.dump(schema, f, indent=2)
+    if out_catalog:
+        schema["selected"] = True
+        catalog = {"streams": [{"stream": schema_name,
+                                "tap_stream_id": schema_name,
+                                "schema": schema
+                                }]}
+        with open(os.path.join(CONFIG["schema_dir"], "catalog.json"), "w") as f:
+            json.dump(catalog, f, indent=2)
+
+
 def parse_args(spec_file, required_config_keys):
     ''' This is to replace singer's default utils.parse_args()
     https://github.com/singer-io/singer-python/blob/master/singer/utils.py
@@ -366,6 +396,11 @@ def parse_args(spec_file, required_config_keys):
         help='Do schema discovery')
 
     parser.add_argument(
+        '-i', '--infer_schema',
+        action='store_true',
+        help='Do infer schema')
+
+    parser.add_argument(
         "--url",
         type=str,
         help="REST API endpoint with {params}. Required in config.")
@@ -377,8 +412,8 @@ def parse_args(spec_file, required_config_keys):
         args.state = utils.load_json(args.state)
     else:
         args.state = {}
-    if args.catalog:
-        args.catalog = Catalog.load(args.catalog)
+    if args.catalog and os.path.isfile(args.catalog):
+            args.catalog = Catalog.load(args.catalog)
 
     utils.check_config(args.config, required_config_keys)
 
@@ -414,6 +449,8 @@ def main():
 
     if args.state:
         STATE.update(args.state)
+    if args.infer_schema:
+        do_infer_schema()
     if args.discover:
         do_discover()
     elif args.catalog:
