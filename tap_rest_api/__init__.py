@@ -27,7 +27,7 @@ REQUIRED_CONFIG_KEYS = []
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"schema_dir": "../../schema", "items_per_page": 100, "max_page": None, "auth_method": "basic"}
+CONFIG = {"schema_dir": "./schema", "catalog_dir": "./catalog", "items_per_page": 100, "max_page": None, "auth_method": "basic"}
 ENDPOINTS = {}
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36 '
@@ -325,8 +325,8 @@ def do_infer_schema(out_catalog=True, add_tstamp=True):
     data = gen_request(schema_name, endpoint, auth_method)
     schema = infer_schema(data)
     if add_tstamp:
-        schema["properties"]["_etl_tstamp"] = {"type": ["null", "number"]}
-    with open(os.path.join(CONFIG["schema_dir"], "schema.json"), "w") as f:
+        schema["properties"]["_etl_tstamp"] = {"type": ["null", "integer"]}
+    with open(os.path.join(CONFIG["schema_dir"], schema_name + ".json"), "w") as f:
         json.dump(schema, f, indent=2)
     if out_catalog:
         schema["selected"] = True
@@ -334,7 +334,7 @@ def do_infer_schema(out_catalog=True, add_tstamp=True):
                                 "tap_stream_id": schema_name,
                                 "schema": schema
                                 }]}
-        with open(os.path.join(CONFIG["schema_dir"], "catalog.json"), "w") as f:
+        with open(os.path.join(CONFIG["catalog_dir"], schema_name + ".json"), "w") as f:
             json.dump(catalog, f, indent=2)
 
 
@@ -353,10 +353,20 @@ def parse_args(spec_file, required_config_keys):
     point to JSON files (config, state, properties), we will automatically
     load and parse the JSON file.
     '''
+    # Read default spec file
+    default_spec = {}
+    default_spec_file = get_abs_path("default_spec.json")
+    with open(default_spec_file, "r") as f:
+        default_spec.update(json.load(f))
+
     # Read spec file
     with open(spec_file, "r") as f:
-        content = f.read()
-    SPEC.update(json.loads(content))
+        SPEC.update(json.load(f))
+
+    # TODO: What about the fields other than arg
+    for a in default_spec["args"]:
+        if SPEC["args"].get(a) is None:
+            SPEC["args"][a] = default_spec["args"][a]
 
     parser = argparse.ArgumentParser(SPEC["application"])
     parser.add_argument("spec_file", type=str, help="Specification file")
@@ -376,11 +386,13 @@ def parse_args(spec_file, required_config_keys):
         help='Config file',
         required=True)
 
+    """
     parser.add_argument(
         "--schema_dir",
         type=str,
-        help="Full path to the schema directory.",
+        help="Path to the schema directory.",
         required=True)
+    """
 
     parser.add_argument(
         '-s', '--state',

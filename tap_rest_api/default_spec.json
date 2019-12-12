@@ -1,0 +1,35 @@
+{
+    "args":
+    {
+        "schema_dir":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Path to the schema directory"
+        },
+        "catalog_dir":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Path to the catalog directory"
+        },
+        "items_per_page":
+        {
+            "type": "integer",
+            "default": null,
+            "help": "# of items per page if API supports paging"
+        },
+        "max_page":
+        {
+            "type": "integer",
+            "default": null,
+            "help": "If set, stop polling after max_page"
+        },
+        "auth_method":
+        {
+            "type": "string",
+            "default": "basic",
+            "help": "HTTP request authentication method: basic, digest, or ntlm"
+        }
+    }
+}
