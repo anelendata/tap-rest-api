@@ -80,6 +80,18 @@ The following args are reserved:
             "default": null,
             "help": "Path to the catalog directory"
         },
+        "start_at":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Start time in ISO 8601 format"
+        },
+        "end_at":
+        {
+            "type": "string",
+            "default": null,
+            "help": "End time in ISO 8601 format"
+        },
         "items_per_page":
         {
             "type": "integer",
