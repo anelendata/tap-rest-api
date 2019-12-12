@@ -96,4 +96,4 @@ if __name__ == "__main__":
 
     schema = infer_schema(sample_data)
 
-    print(json.dumps(schema, indent=4))
+    print(json.dumps(schema, indent=2))

@@ -306,10 +306,11 @@ def discover_schemas(schema="orders"):
                                   'schema': load_discovered_schema(stream)})
     return result
 
+
 def do_discover():
     '''JSON dump the schemas to stdout'''
     LOGGER.info("Loading Schemas")
-    json.dump(discover_schemas(CONFIG["schema"]), sys.stdout, indent=4)
+    json.dump(discover_schemas(CONFIG["schema"]), sys.stdout, indent=2)
 
 
 def do_infer_schema(out_catalog=True, add_tstamp=True):
