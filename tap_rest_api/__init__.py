@@ -27,7 +27,15 @@ REQUIRED_CONFIG_KEYS = []
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"schema_dir": "./schema", "catalog_dir": "./catalog", "items_per_page": 100, "max_page": None, "auth_method": "basic"}
+CONFIG = {"schema_dir": "./schema",
+          "catalog_dir": "./catalog",
+          "items_per_page": 100,
+          "max_page": None,
+          "auth_method": "basic",
+          # Set this like "level_a,level_b,..." if the target list is at raw_list["level_a"]["level_b"]...
+          "record_list_level": None,
+          # Set this like "level_1,level_2..." if the target object is at raw_record["level_1"]["level_2"]...
+          "record_level": None}
 ENDPOINTS = {}
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36 '
@@ -180,12 +188,13 @@ def get_last_update(record, current):
     last_update = current
     if CONFIG.get("datetime_key"):
         key = CONFIG["datetime_key"]
-        if(key in record) and (parser.parse(record[key]) > parser.parse(current)):
+        if (key in record) and (parser.parse(record[key]) > parser.parse(current)):
             last_update = record[key]
     elif CONFIG.get("index_key"):
         key = CONFIG["index_key"]
-        if(key in record) and (not current or record[key] > current):
-            last_update = record[key]
+        r_str = str(record.get(key))
+        if r_str and (not current or r_str > current):
+            last_update = r_str
         else:
             KeyError("index_key not found in the record")
     else:
@@ -210,8 +219,10 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
             endpoint = get_endpoint(schema_name, params)
             LOGGER.info("GET %s", endpoint)
             rows = gen_request(schema_name, endpoint, auth_method)
+            rows = get_record_list(rows, CONFIG.get("record_list_level"))
             for row in rows:
                 counter.increment()
+                row = get_record(row, CONFIG.get("record_level"))
                 row = filter_result(row, schema)
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = etl_tstamp
@@ -313,6 +324,32 @@ def do_discover():
     json.dump(discover_schemas(CONFIG["schema"]), sys.stdout, indent=2)
 
 
+def get_record(raw_item, record_level):
+    """
+    Dig the items until the target schema
+    """
+    if not record_level:
+        return raw_item
+
+    record = raw_item
+    print(record)
+    for x in record_level.split(","):
+        record = record[x]
+
+    return record
+
+
+def get_record_list(data, record_list_level):
+    """
+    Dig the raw data to the level that contains the list of the records
+    """
+    if not record_list_level:
+        return data
+    for x in record_list_level.split(","):
+        data = data[x]
+    return data
+
+
 def do_infer_schema(out_catalog=True, add_tstamp=True):
     params = CONFIG
     page_number = 0
@@ -324,7 +361,11 @@ def do_infer_schema(out_catalog=True, add_tstamp=True):
     LOGGER.info("GET %s", endpoint)
     auth_method = CONFIG.get("auth_method", "basic")
     data = gen_request(schema_name, endpoint, auth_method)
-    schema = infer_schema(data)
+
+    # In case the record is not at the root level
+    data = get_record_list(data, CONFIG.get("record_list_level"))
+
+    schema = infer_schema(data, CONFIG.get("record_level"))
     if add_tstamp:
         schema["properties"]["_etl_tstamp"] = {"type": ["null", "integer"]}
     with open(os.path.join(CONFIG["schema_dir"], schema_name + ".json"), "w") as f:

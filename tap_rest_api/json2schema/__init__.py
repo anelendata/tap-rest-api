@@ -3,8 +3,14 @@ import json, sys, re
 # JSON schema follows:
 # https://json-schema.org/
 
-def _do_infer_schema(obj):
+def _do_infer_schema(obj, record_level=None):
     schema = dict()
+
+    # Go down to the record level if specified
+    if record_level:
+        for x in record_level.split(","):
+            obj = obj[x]
+
     if type(obj) is dict and obj.keys():
         schema["type"] = ["null", "object"]
         schema["properties"] = dict()
@@ -76,14 +82,14 @@ def infer_from_two(schema1, schema2):
     return schema
 
 
-def infer_schema(obj):
+def infer_schema(obj, record_level=None):
     if type(obj) is not list:
         obj = [obj]
     if type(obj[0]) is not dict:
         raise ValueError("Input must be a dict object.")
     schema = None
     for o in obj:
-        cur_schema = _do_infer_schema(o)
+        cur_schema = _do_infer_schema(o, record_level)
         schema = infer_from_two(schema, cur_schema)
     schema["type"] = "object"
     return schema
