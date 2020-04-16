@@ -163,7 +163,9 @@ def giveup(exc):
 @utils.backoff((backoff.expo,requests.exceptions.RequestException), giveup)
 @utils.ratelimit(20, 1)
 def gen_request(stream_id, url, auth_method="basic"):
-    if auth_method == "basic":
+    if not auth_method:
+        auth=None
+    elif auth_method == "basic":
         auth=HTTPBasicAuth(CONFIG["username"], CONFIG["password"])
     elif auth_method == "digest":
         auth=HTTPDigestAuth(CONFIG["username"], CONFIG["password"])
