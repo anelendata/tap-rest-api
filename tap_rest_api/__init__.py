@@ -212,7 +212,7 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
     last_update = start
     page_number = 1
     offset_number = 0  # Offset is the number of records (vs. page)
-    etl_tstamp = time.time()
+    etl_tstamp = int(time.time())
     with metrics.record_counter(schema_name) as counter:
         while True:
             params = CONFIG
@@ -230,8 +230,11 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
                     row["_etl_tstamp"] = etl_tstamp
                 last_update = get_last_update(row, last_update)
                 singer.write_record(schema_name, row)
+
+            LOGGER.info("Current page %d" % page_number)
+            LOGGER.info("Current offset %d" % offset_number)
+
             if len(rows) == 0 or (max_page and page_number + 1 > max_page):
-            # if len(rows) < CONFIG["items_per_page"]:
                 break
             else:
                 page_number +=1
@@ -334,7 +337,6 @@ def get_record(raw_item, record_level):
         return raw_item
 
     record = raw_item
-    print(record)
     for x in record_level.split(","):
         record = record[x]
 
