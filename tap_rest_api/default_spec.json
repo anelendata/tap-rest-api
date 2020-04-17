@@ -1,34 +1,107 @@
 {
+    "application": "REST API singer.io tap",
     "args":
     {
-        "schema_dir":
+        "url":
         {
             "type": "string",
             "default": null,
+            "help": "REST API endpoint with {params}. Required in config."
+        },
+
+        "auth_method":
+        {
+            "type": "string",
+            "default": "basic",
+            "help": "HTTP request authentication method: basic, digest, or ntlm"
+        },
+        "username":
+        {
+            "type": "string",
+            "default": null,
+            "help": "username used for authentication if applicable"
+        },
+        "password":
+        {
+            "type": "string",
+            "default": null,
+            "help": "password used for authentication if applicable"
+        },
+
+        "schema_dir":
+        {
+            "type": "string",
+            "default": "./schema",
             "help": "Path to the schema directory"
         },
         "catalog_dir":
         {
             "type": "string",
-            "default": null,
+            "default": "./catalog",
             "help": "Path to the catalog directory"
         },
-        "start_at":
+
+        "timestamp_key":
         {
             "type": "string",
             "default": null,
-            "help": "Start time in ISO 8601 format"
+            "help": "Unix timestamp key(column) name. If this is not null, timestamp_key is ignored"
         },
-        "end_at":
-        {
-            "type": "string",
-            "default": null,
-            "help": "End time in ISO 8601 format"
-        },
-        "items_per_page":
+        "start_timestamp":
         {
             "type": "integer",
             "default": null,
+            "help": "Start Unix timestamp"
+        },
+        "end_timestamp":
+        {
+            "type": "integer",
+            "default": null,
+            "help": "End Unix timestamp. When this is set, tap only replicates the record with end_timestamp younger than end_timestamp. Once equal or greater than end_datetime is read, the process exits."
+        },
+
+        "datetime_key":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Datetime key(column) name. If this is not null, timestamp_key is ignored"
+        },
+        "start_datetime":
+        {
+            "type": "datetime",
+            "default": null,
+            "help": "Start datetime in ISO 8601 format. As a convenience, this will be automatically converted to timestamp if datetime_key is null and timestamp_key is set and start_timestamp is null."
+        },
+        "end_datetime":
+        {
+            "type": "datetime",
+            "default": null,
+            "help": "End datetime in ISO 8601 format. When this is set, tap only replicates the record with datetime younger than end_datetime.  Once equal or greater than end_datetime is read, the process exits. As a convenience, this will be automatically converted to timestamp if datetime_key is null and timestamp_key is set and end_timestamp is null."
+        },
+
+        "index_key":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Index key (column) name"
+        },
+        "start_index":
+        {
+            "type": "integer",
+            "default": 0,
+            "help": "Starting index number"
+        },
+        "end_index":
+        {
+            "type": "integer",
+            "default": 0,
+            "help": "When this is set, tap only replicates the record with index younger than end_index. Once equal or greater than end_index is read, the process exits."
+        },
+
+        "items_per_page":
+        {
+            "type": "integer",
+            "default": 100,
             "help": "# of items per page if API supports paging"
         },
         "max_page":
@@ -37,11 +110,18 @@
             "default": null,
             "help": "If set, stop polling after max_page"
         },
-        "auth_method":
+
+        "record_list_level":
         {
             "type": "string",
-            "default": "basic",
-            "help": "HTTP request authentication method: basic, digest, or ntlm"
+            "default": null,
+            "help": "Set this like 'level_1,level_2...' if the target list is at raw_json_response[level_1][level_2]..."
+        },
+        "record_level":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Set this like 'level_a,level_b...' if the target object is at raw_individual_record[level_a][level_b]..."
         }
     }
 }

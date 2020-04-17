@@ -33,86 +33,13 @@ Example (spec.json):
             "type": "string",
             "default": null,
             "help": "Password for REST API Basic Auth"
-        },
-        "start_index":
-        {
-            "type": "integer",
-            "default": 0,
-            "help": "Starting index number"
-        },
-        "index_key":
-        {
-            "type": "string",
-            "default": null,
-            "help": "Index key name"
-        },
-        "start_at":
-        {
-            "type": "datetime",
-            "default": null,
-            "help": "Start time in ISO 8601 format"
-        },
-        "end_at":
-        {
-            "type": "datetime",
-            "default": null,
-            "help": "End time in ISO 8601 format"
         }
     }
 }
 ```
 
-The following args are reserved:
+The args that are reserved default can be found [default_spec.json](./default_spec.json)
 
-```
-{
-    "args":
-    {
-        "schema_dir":
-        {
-            "type": "string",
-            "default": null,
-            "help": "Path to the schema directory"
-        },
-        "catalog_dir":
-        {
-            "type": "string",
-            "default": null,
-            "help": "Path to the catalog directory"
-        },
-        "start_at":
-        {
-            "type": "string",
-            "default": null,
-            "help": "Start time in ISO 8601 format"
-        },
-        "end_at":
-        {
-            "type": "string",
-            "default": null,
-            "help": "End time in ISO 8601 format"
-        },
-        "items_per_page":
-        {
-            "type": "integer",
-            "default": null,
-            "help": "# of items per page if API supports paging"
-        },
-        "max_page":
-        {
-            "type": "integer",
-            "default": null,
-            "help": "If set, stop polling after max_page"
-        },
-        "auth_method":
-        {
-            "type": "string",
-            "default": "basic",
-            "help": "HTTP request authentication method: basic, digest, or ntlm"
-        }
-    }
-}
-```
 
 2. Create Config file from sample-config.json
 

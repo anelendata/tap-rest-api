@@ -22,20 +22,12 @@ TYPES = {
     "integer": int
     }
 
-REQUIRED_CONFIG_KEYS = []
-# REQUIRED_CONFIG_KEYS = ["url", "consumer_key", "consumer_secret", "start_datetime", "schema"]
+REQUIRED_CONFIG_KEYS = ["url"]
 
 LOGGER = singer.get_logger()
 
-CONFIG = {"schema_dir": "./schema",
-          "catalog_dir": "./catalog",
-          "items_per_page": 100,
-          "max_page": None,
-          "auth_method": "basic",
-          # Set this like "level_a,level_b,..." if the target list is at raw_list["level_a"]["level_b"]...
-          "record_list_level": None,
-          # Set this like "level_1,level_2..." if the target object is at raw_record["level_1"]["level_2"]...
-          "record_level": None}
+CONFIG = {}
+
 ENDPOINTS = {}
 
 USER_AGENT = 'Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36 '
@@ -62,10 +54,57 @@ def get_endpoint(endpoint, kwargs):
 def get_start(STATE, tap_stream_id, bookmark_key):
     current_bookmark = singer.get_bookmark(STATE, tap_stream_id, bookmark_key)
     if current_bookmark is None:
-        current_bookmark = CONFIG.get("start_datetime", CONFIG.get("start_index"))
+        if CONFIG.get("timestamp_key"):
+            if not CONFIG.get("start_timestamp") and not CONFIG.get("start_datetime"):
+                raise KeyError("timestamp_key is set but neither start_timestamp or start_datetime is set")
+            current_bookmark = CONFIG.get("start_timestamp")
+            if current_bookmark is None:
+                current_bookmark = parser.parse(CONFIG["start_datetime"]).timestamp()
+        elif CONFIG.get("datetime_key"):
+            if not CONFIG.get("start_datetime"):
+                raise KeyError("datetime_key is set but start_datetime is not set")
+            current_bookmark = CONFIG.get("start_datetime")
+        elif CONFIG.get("index_key"):
+            if not CONFIG.get("index_key"):
+                raise KeyError("index_key is set but start_index is not set")
+            current_bookmark = CONFIG.get("start_index")
+
         if current_bookmark is None:
-            raise KeyError("Neither start_datetime or start_index is set.")
+            raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
     return current_bookmark
+
+
+def get_last_update(record, current):
+    last_update = current
+    if CONFIG.get("timestamp_key"):
+        key = CONFIG["timestamp_key"]
+        if (key in record) and record[key] > current:
+            # Handle the data with sub-seconds converted to int
+            ex_digits = len(str(int(record[key]))) - 10
+            last_update = record[key] / (pow(10, ex_digits))
+        else:
+            KeyError("timestamp_key not found in the record")
+    elif CONFIG.get("datetime_key"):
+        key = CONFIG["datetime_key"]
+        if (key in record) and (parser.parse(record[key]) > parser.parse(current)):
+            last_update = record[key]
+        else:
+            KeyError("datetime_key not found in the record")
+    elif CONFIG.get("index_key"):
+        key = CONFIG["index_key"]
+        r_str = str(record.get(key))
+        if r_str and (not current or r_str > current):
+            last_update = r_str
+        else:
+            KeyError("index_key not found in the record")
+    else:
+        raise KeyError("Neither timestamp_key, datetime_key, or index_key is set")
+    return last_update
+
+
+def get_tzinfo():
+    return pytz.utc
+    parser.parse(CONFIG[datetime_param]).tzinfo
 
 
 def load_schema(entity):
@@ -83,11 +122,6 @@ def nested_get(input_dict, nested_key):
         if internal_dict_value is None:
             return None
     return internal_dict_value
-
-
-def get_tzinfo():
-    return pytz.utc
-    parser.parse(CONFIG[datetime_param]).tzinfo
 
 
 def _do_filter(obj, dict_path, schema):
@@ -184,24 +218,6 @@ def gen_request(stream_id, url, auth_method="basic"):
         timer.tags[metrics.Tag.http_status_code] = resp.status_code
         resp.raise_for_status()
         return resp.json()
-
-
-def get_last_update(record, current):
-    last_update = current
-    if CONFIG.get("datetime_key"):
-        key = CONFIG["datetime_key"]
-        if (key in record) and (parser.parse(record[key]) > parser.parse(current)):
-            last_update = record[key]
-    elif CONFIG.get("index_key"):
-        key = CONFIG["index_key"]
-        r_str = str(record.get(key))
-        if r_str and (not current or r_str > current):
-            last_update = r_str
-        else:
-            KeyError("index_key not found in the record")
-    else:
-        raise KeyError("Neither datetime_key or index_key is set")
-    return last_update
 
 def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, auth_method="basic"):
     schema = load_schema(schema_name)
@@ -405,14 +421,11 @@ def parse_args(spec_file, required_config_keys):
     with open(default_spec_file, "r") as f:
         default_spec.update(json.load(f))
 
-    # Read spec file
+    SPEC.update(default_spec)
+
+    # Overwrite with the custom spec file
     with open(spec_file, "r") as f:
         SPEC.update(json.load(f))
-
-    # TODO: What about the fields other than arg
-    for a in default_spec["args"]:
-        if SPEC["args"].get(a) is None:
-            SPEC["args"][a] = default_spec["args"][a]
 
     parser = argparse.ArgumentParser(SPEC["application"])
     parser.add_argument("spec_file", type=str, help="Specification file")
@@ -426,19 +439,11 @@ def parse_args(spec_file, required_config_keys):
             help=SPEC["args"][arg].get("help"),
             required=SPEC["args"][arg].get("required", False))
 
-    # Default arguments
+    # Default singer arguments and commands
     parser.add_argument(
         '-c', '--config',
         help='Config file',
         required=True)
-
-    """
-    parser.add_argument(
-        "--schema_dir",
-        type=str,
-        help="Path to the schema directory.",
-        required=True)
-    """
 
     parser.add_argument(
         '-s', '--state',
@@ -457,11 +462,6 @@ def parse_args(spec_file, required_config_keys):
         '-i', '--infer_schema',
         action='store_true',
         help='Do infer schema')
-
-    parser.add_argument(
-        "--url",
-        type=str,
-        help="REST API endpoint with {params}. Required in config.")
 
     args = parser.parse_args()
     if args.config:
@@ -485,15 +485,14 @@ def main():
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
     CONFIG.update(args.config)
 
-    # Overwrite config specs with commandline args if present
+    LOGGER.info("Config: " + str(CONFIG))
 
+    # Overwrite config specs with commandline args
     args_dict = args.__dict__
     for arg in args_dict.keys():
-        if CONFIG.get(arg) and args_dict.get(arg):
+        if args_dict[arg]:
+            print(arg + str(args_dict[arg]))
             CONFIG[arg] = args_dict[arg]
-
-    # if not CONFIG.get("end_datetime"):
-    #     CONFIG["end_datetime"]  = datetime.datetime.utcnow().isoformat()
 
     STATE = {}
     schema = CONFIG["schema"]
