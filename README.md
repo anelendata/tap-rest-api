@@ -14,39 +14,49 @@ This tap:
 
 Usage:
 
-1. Create the spec for config file from sample-spec.json
+1. Create the spec for config file:
 
-Example (spec.json):
+Example:
 
 ```
 {
     "application": "Some example API",
     "args": {
-        "username":
+        "prod_stage":
         {
             "type": "string",
-            "default": null,
-            "help": "Username for REST API Basic Auth"
+            "default": "stage",
+            "help": "This will fill the URL as https://{prod_stage}api.example.com"
         },
-        "password":
+        "api_version":
         {
-            "type": "string",
-            "default": null,
-            "help": "Password for REST API Basic Auth"
+            "type": "integer",
+            "default": 1,
+            "help": "This will fill the API version as https://api.example.com/v/{api_version}/"
         }
     }
+}
+```
+
+Note: Currently, you need to create this file even if you don't want to modify the default config specs.
+In such cases, please provide an empty args object:
+
+```
+{
+    "application": "Some example API",
+    "args": {}
 }
 ```
 
 The args that are reserved default can be found [default_spec.json](./tap_rest_api/default_spec.json)
 
 
-2. Create Config file from sample-config.json
+2. Create Config file based on the spec:
 
 Example:
 ```
 {
-  "url":"https://example.com/v1/customers",
+  "url":"https://example.com/v1/some_resource",
   "username":"xxxx",
   "password":"yyyy",
   "datetime_key": "last_modified_at",
@@ -56,18 +66,21 @@ Example:
 }
 ```
 
-Note: url can contain parameters from config values and the following run-time variables:
+Note: URL can contain parameters from config values and the following run-time variables:
 
+- resource: The current resource you are accessing based on Tap Stream ID provided by [streams default config variable](./tap_rest_api/default_spec.json).
 - current_page: The current page if the endpoint supports paging
 - current_offset: Offset by the number of rows to skip
 
 Example:
 
 ```
-http://example.com/v1/customers?offset={current_offset}&limit={items_per_page}
+http://api.example.com/v1/{resource}?offset={current_offset}&limit={items_per_page}
 ```
 
-In the above example, {items_per_page} and {current_offset} is substituted by the config value and the runtime value, respectively.
+In the above example,
+- {items_per_page} is substituted by the config value.
+- {resource} and {current_offset} is substituted by the runtime value based on the current stream and paging.
 
 3. Create schema and catalog files
 
