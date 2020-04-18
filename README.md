@@ -43,26 +43,29 @@ The args that are reserved default can be found [default_spec.json](./default_sp
 
 2. Create Config file from sample-config.json
 
+Example:
 ```
 {
   "url":"https://example.com/v1/customers",
   "username":"xxxx",
   "password":"yyyy",
-  "start_datetime": <ISO8601-Date-String>,
-  "end_datetime": <ISO8601-Date-String>,
+  "datetime_key": "last_modified_at",
+  "start_datetime": "2020-04-01 00:00:00Z",
+  "end_datetime": "2020-05-01 00:00:00Z",
   "schema_dir": <path_to_schema_dir>
 }
 ```
-
-- start date will determine how far back in your order history the tap will go
-	- this is only relevant for the initial run, progress afterwards will be bookmarked
 
 Note: url can contain parameters from config values and the following run-time variables:
 
 - current_page: The current page if the endpoint supports paging
 - current_offset: Offset by the number of rows to skip
 
-Example: http://example.com/v1/customers?offset={current_offset}&limit={items_per_page}
+Example:
+
+```
+http://example.com/v1/customers?offset={current_offset}&limit={items_per_page}
+```
 
 In the above example, {items_per_page} and {current_offset} is substituted by the config value and the runtime value, respectively.
 

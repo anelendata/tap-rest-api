@@ -3,7 +3,7 @@
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 # from requests_ntlm import HTTPNtlmAuth
 
-from dateutil import parser
+import dateutil
 import argparse, attr, backoff, datetime, itertools, json, os, pytz, requests, sys, time, urllib
 
 import singer
@@ -51,6 +51,16 @@ def get_endpoint(endpoint, kwargs):
     return CONFIG["url"] + ENDPOINTS[endpoint].format(**kwargs)
 
 
+def get_bookmark_type():
+    if CONFIG.get("timestamp_key"):
+        return "timestamp"
+    if CONFIG.get("datetime_key"):
+        return "datetime"
+    if CONFIG.get("index_key"):
+        return "index"
+    raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
+
+
 def get_start(STATE, tap_stream_id, bookmark_key):
     current_bookmark = singer.get_bookmark(STATE, tap_stream_id, bookmark_key)
     if current_bookmark is None:
@@ -59,19 +69,31 @@ def get_start(STATE, tap_stream_id, bookmark_key):
                 raise KeyError("timestamp_key is set but neither start_timestamp or start_datetime is set")
             current_bookmark = CONFIG.get("start_timestamp")
             if current_bookmark is None:
-                current_bookmark = parser.parse(CONFIG["start_datetime"]).timestamp()
+                current_bookmark = dateutil.parser.parse(CONFIG["start_datetime"]).timestamp()
         elif CONFIG.get("datetime_key"):
             if not CONFIG.get("start_datetime"):
                 raise KeyError("datetime_key is set but start_datetime is not set")
             current_bookmark = CONFIG.get("start_datetime")
         elif CONFIG.get("index_key"):
-            if not CONFIG.get("index_key"):
+            if not CONFIG.get("start_index"):
                 raise KeyError("index_key is set but start_index is not set")
             current_bookmark = CONFIG.get("start_index")
 
         if current_bookmark is None:
             raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
     return current_bookmark
+
+
+def get_end():
+    if CONFIG.get("timestamp_key"):
+        end_from_config = CONFIG.get("end_timestamp")
+        if end_from_config is None:
+            end_from_config = dateutil.parser.parse(CONFIG["end_datetime"]).timestamp()
+    elif CONFIG.get("datetime_key"):
+        end_from_config = CONFIG.get("end_datetime")
+    elif CONFIG.get("index_key"):
+        end_from_config = CONFIG.get("end_index")
+    return end_from_config
 
 
 def get_last_update(record, current):
@@ -86,7 +108,7 @@ def get_last_update(record, current):
             KeyError("timestamp_key not found in the record")
     elif CONFIG.get("datetime_key"):
         key = CONFIG["datetime_key"]
-        if (key in record) and (parser.parse(record[key]) > parser.parse(current)):
+        if (key in record) and (dateutil.parser.parse(record[key]) > dateutil.parser.parse(current)):
             last_update = record[key]
         else:
             KeyError("datetime_key not found in the record")
@@ -104,14 +126,12 @@ def get_last_update(record, current):
 
 def get_tzinfo():
     return pytz.utc
-    parser.parse(CONFIG[datetime_param]).tzinfo
+    # dateutil.parser.parse(CONFIG[datetime_param]).tzinfo
 
 
 def load_schema(entity):
     '''Returns the schema for the specified source'''
     schema = utils.load_json(os.path.join(CONFIG["schema_dir"], "{}.json".format(entity)))
-    # schema = utils.load_json(get_abs_path(CONFIG["schema_dir"] + "/{}.json".format(entity)))
-
     return schema
 
 
@@ -153,7 +173,7 @@ def _do_filter(obj, dict_path, schema):
         if obj_type == "string":
             filtered = str(obj)
             if obj_format == "date-time":
-                filtered = parser.parse(obj).replace(tzinfo=tzinfo).isoformat()
+                filtered = dateutil.parser.parse(obj).replace(tzinfo=tzinfo).isoformat()
         elif obj_type == "number":
             try:
                 filtered = float(obj)
@@ -176,9 +196,9 @@ def convert_time(row, schema):
         if SPEC["args"][key]["type"] == "datetime":
             datetime_param = key
 
-    tzinfo = parser.parse(CONFIG[datetime_param]).tzinfo
+    tzinfo = dateutil.parser.parse(CONFIG[datetime_param]).tzinfo
     for d in filtered:
-        filtered[d] = parser.parse(row[datetime_param]).replace(tzinfo=tzinfo).isoformat()
+        filtered[d] = date.util.parser.parse(row[datetime_param]).replace(tzinfo=tzinfo).isoformat()
 
     if filtered.get("meta_data"):
         filtered.pop("meta_data")
@@ -223,8 +243,19 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
     schema = load_schema(schema_name)
     singer.write_schema(schema_name, schema, key_properties)
 
+    bookmark_type = get_bookmark_type()
+
     start = get_start(STATE, schema_name, "last_update")
-    LOGGER.info("Only syncing %s updated since %s" % (schema_name, start))
+    end = get_end()
+
+    pretty_start = start
+    pretty_end = end
+    if bookmark_type == "timestamp":
+        pretty_start = str(start) + " (" + str(datetime.datetime.fromtimestamp(start)) + ")"
+        pretty_end = str(end) + " (" + str(datetime.datetime.fromtimestamp(end)) + ")"
+
+    LOGGER.info("Stream %s has %s set starting %s and ending %s. I trust you set URL format contains those params. The behavior depends on the data source API's spec. I will not filter out the records outside the boundary. Every record received is will be written out." % (schema_name, bookmark_type, pretty_start, pretty_end))
+
     last_update = start
     page_number = 1
     offset_number = 0  # Offset is the number of records (vs. page)
@@ -309,6 +340,12 @@ def do_sync(STATE, catalogs, schema, max_page=None, auth_method="basic"):
         except Exception as e:
             LOGGER.critical(e)
             raise e
+
+        bookmark_type = get_bookmark_type()
+        last_update = STATE["bookmarks"][stream.tap_stream_id]["last_update"]
+        if bookmark_type == "timestamp":
+            last_update = str(last_update) + " (" + str(datetime.datetime.fromtimestamp(last_update)) + ")"
+        LOGGER.info("Last record's %s: %s" % (bookmark_type, last_update))
 
     end_process_at = datetime.datetime.now()
     LOGGER.info("Completed sync at %s" % str(end_process_at))
@@ -428,6 +465,7 @@ def parse_args(spec_file, required_config_keys):
         SPEC.update(json.load(f))
 
     parser = argparse.ArgumentParser(SPEC["application"])
+
     parser.add_argument("spec_file", type=str, help="Specification file")
 
     # Capture additional args
@@ -453,6 +491,7 @@ def parse_args(spec_file, required_config_keys):
         '--catalog',
         help='Catalog file')
 
+    # commands
     parser.add_argument(
         '-d', '--discover',
         action='store_true',
@@ -464,6 +503,7 @@ def parse_args(spec_file, required_config_keys):
         help='Do infer schema')
 
     args = parser.parse_args()
+
     if args.config:
         args.config = utils.load_json(args.config)
     if args.state:
@@ -485,13 +525,10 @@ def main():
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
     CONFIG.update(args.config)
 
-    LOGGER.info("Config: " + str(CONFIG))
-
     # Overwrite config specs with commandline args
     args_dict = args.__dict__
     for arg in args_dict.keys():
         if args_dict[arg]:
-            print(arg + str(args_dict[arg]))
             CONFIG[arg] = args_dict[arg]
 
     STATE = {}
