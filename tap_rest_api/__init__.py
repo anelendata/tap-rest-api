@@ -40,15 +40,16 @@ class Stream(object):
     kwargs = attr.ib()
 
 
-def get_endpoint(endpoint, kwargs):
-    '''Get the full url for the endpoint'''
-    # TODO: Support multiple streams
+def get_endpoint(tap_stream_id, kwargs):
+    """ Get the full url for the endpoint
+    In addition to params passed from config values, it will create "resource"
+    that is derived from tap_stream_id.
+    URL can be something like:
+    https://api.example.com/1/{resource}?last_update_start={start_datetime}&last_update_end={end_datetime}&items_per_page={items_per_page}&page={current_page}
+    """
+    params = {"resource": tap_stream_id}
+    params.update(kwargs)
     return CONFIG["url"].format(**kwargs)
-
-    # Original code
-    if endpoint not in ENDPOINTS:
-        raise ValueError("Invalid endpoint {}".format(endpoint))
-    return CONFIG["url"] + ENDPOINTS[endpoint].format(**kwargs)
 
 
 def get_bookmark_type():
@@ -217,7 +218,7 @@ def giveup(exc):
 @utils.backoff((backoff.expo,requests.exceptions.RequestException), giveup)
 @utils.ratelimit(20, 1)
 def gen_request(stream_id, url, auth_method="basic"):
-    if not auth_method:
+    if not auth_method or auth_method == "no_auth":
         auth=None
     elif auth_method == "basic":
         auth=HTTPBasicAuth(CONFIG["username"], CONFIG["password"])
@@ -226,7 +227,7 @@ def gen_request(stream_id, url, auth_method="basic"):
     elif auth_method == "ntlm":
         auth=HTTPNtlmAuth(CONFIG["username"], CONFIG["password"])
     else:
-        raise ValueError("Unknown auth method: " + auth)
+        raise ValueError("Unknown auth method: " + auth_method)
 
     LOGGER.info("Using %s authentication method." % auth_method)
 
@@ -239,13 +240,13 @@ def gen_request(stream_id, url, auth_method="basic"):
         resp.raise_for_status()
         return resp.json()
 
-def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, auth_method="basic"):
-    schema = load_schema(schema_name)
-    singer.write_schema(schema_name, schema, key_properties)
+def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_page=None):
+    schema = load_schema(tap_stream_id)
+    singer.write_schema(tap_stream_id, schema, key_properties)
 
     bookmark_type = get_bookmark_type()
 
-    start = get_start(STATE, schema_name, "last_update")
+    start = get_start(STATE, tap_stream_id, "last_update")
     end = get_end()
 
     pretty_start = start
@@ -254,20 +255,20 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
         pretty_start = str(start) + " (" + str(datetime.datetime.fromtimestamp(start)) + ")"
         pretty_end = str(end) + " (" + str(datetime.datetime.fromtimestamp(end)) + ")"
 
-    LOGGER.info("Stream %s has %s set starting %s and ending %s. I trust you set URL format contains those params. The behavior depends on the data source API's spec. I will not filter out the records outside the boundary. Every record received is will be written out." % (schema_name, bookmark_type, pretty_start, pretty_end))
+    LOGGER.info("Stream %s has %s set starting %s and ending %s. I trust you set URL format contains those params. The behavior depends on the data source API's spec. I will not filter out the records outside the boundary. Every record received is will be written out." % (tap_stream_id, bookmark_type, pretty_start, pretty_end))
 
     last_update = start
     page_number = 1
     offset_number = 0  # Offset is the number of records (vs. page)
     etl_tstamp = int(time.time())
-    with metrics.record_counter(schema_name) as counter:
+    with metrics.record_counter(tap_stream_id) as counter:
         while True:
             params = CONFIG
             params.update({"current_page": page_number})
             params.update({"current_offset": offset_number})
-            endpoint = get_endpoint(schema_name, params)
+            endpoint = get_endpoint(tap_stream_id, params)
             LOGGER.info("GET %s", endpoint)
-            rows = gen_request(schema_name, endpoint, auth_method)
+            rows = gen_request(tap_stream_id, endpoint, auth_method)
             rows = get_record_list(rows, CONFIG.get("record_list_level"))
             for row in rows:
                 counter.increment()
@@ -276,7 +277,7 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = etl_tstamp
                 last_update = get_last_update(row, last_update)
-                singer.write_record(schema_name, row)
+                singer.write_record(tap_stream_id, row)
 
             LOGGER.info("Current page %d" % page_number)
             LOGGER.info("Current offset %d" % offset_number)
@@ -287,7 +288,7 @@ def sync_rows(STATE, catalog, schema_name, key_properties=[], max_page=None, aut
                 page_number +=1
                 offset_number += len(rows)
 
-    STATE = singer.write_bookmark(STATE, schema_name, 'last_update', last_update)
+    STATE = singer.write_bookmark(STATE, tap_stream_id, 'last_update', last_update)
     singer.write_state(STATE)
     return STATE
 
@@ -307,7 +308,8 @@ def get_streams_to_sync(streams, state):
 def get_selected_streams(remaining_streams, annotated_schema):
     selected_streams = []
 
-    for stream in remaining_streams:
+    for key in remaining_streams.keys():
+        stream = remaining_streams[key]
         tap_stream_id = stream.tap_stream_id
         for stream_idx, annotated_stream in enumerate(annotated_schema.streams):
             if tap_stream_id == annotated_stream.tap_stream_id:
@@ -318,11 +320,11 @@ def get_selected_streams(remaining_streams, annotated_schema):
     return selected_streams
 
 
-def do_sync(STATE, catalogs, schema, max_page=None, auth_method="basic"):
+def do_sync(STATE, catalog, max_page=None, auth_method="basic"):
     '''Sync the streams that were selected'''
     start_process_at = datetime.datetime.now()
-    remaining_streams = get_streams_to_sync(STREAMS[schema], STATE)
-    selected_streams = get_selected_streams(remaining_streams, catalogs)
+    remaining_streams = get_streams_to_sync(STREAMS, STATE)
+    selected_streams = get_selected_streams(remaining_streams, catalog)
     if len(selected_streams) < 1:
         LOGGER.info("No Streams selected, please check that you have a schema selected in your catalog")
         return
@@ -335,8 +337,7 @@ def do_sync(STATE, catalogs, schema, max_page=None, auth_method="basic"):
         singer.write_state(STATE)
 
         try:
-            catalog = [cat for cat in catalogs.streams if cat.stream == stream.tap_stream_id][0]
-            STATE = sync_rows(STATE, catalog, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
+            STATE = sync_rows(STATE, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
         except Exception as e:
             LOGGER.critical(e)
             raise e
@@ -345,6 +346,7 @@ def do_sync(STATE, catalogs, schema, max_page=None, auth_method="basic"):
         last_update = STATE["bookmarks"][stream.tap_stream_id]["last_update"]
         if bookmark_type == "timestamp":
             last_update = str(last_update) + " (" + str(datetime.datetime.fromtimestamp(last_update)) + ")"
+        LOGGER.info("End sync " + stream.tap_stream_id)
         LOGGER.info("Last record's %s: %s" % (bookmark_type, last_update))
 
     end_process_at = datetime.datetime.now()
@@ -365,7 +367,7 @@ def load_discovered_schema(stream):
     return schema
 
 
-def discover_schemas(schema="orders"):
+def discover_schemas(schema):
     '''Iterate through streams, push to an array and return'''
     result = {'streams': []}
     for stream in STREAMS[schema]:
@@ -408,16 +410,24 @@ def get_record_list(data, record_list_level):
 
 
 def do_infer_schema(out_catalog=True, add_tstamp=True):
+    """
+    Infer schema from the sample record list and write JSON schema and
+    catalog files under schema directory and catalog directory.
+    To fully support multiple streams, the catalog files must be consolidated
+    but that is not supported in this function yet.
+    """
+    # TODO: Support multiple streams specified by STREAM[]
+    tap_stream_id = STREAM[STREAM.keys()[0]].tap_stream_id
+
     params = CONFIG
     page_number = 0
     offset_number = 0
     params.update({"current_page": page_number})
     params.update({"current_offset": offset_number})
-    schema_name = CONFIG["schema"]
-    endpoint = get_endpoint(schema_name, params)
+    endpoint = get_endpoint(tap_stream_id, params)
     LOGGER.info("GET %s", endpoint)
     auth_method = CONFIG.get("auth_method", "basic")
-    data = gen_request(schema_name, endpoint, auth_method)
+    data = gen_request(tap_stream_id, endpoint, auth_method)
 
     # In case the record is not at the root level
     data = get_record_list(data, CONFIG.get("record_list_level"))
@@ -425,15 +435,17 @@ def do_infer_schema(out_catalog=True, add_tstamp=True):
     schema = infer_schema(data, CONFIG.get("record_level"))
     if add_tstamp:
         schema["properties"]["_etl_tstamp"] = {"type": ["null", "integer"]}
-    with open(os.path.join(CONFIG["schema_dir"], schema_name + ".json"), "w") as f:
+
+    with open(os.path.join(CONFIG["schema_dir"], tap_stream_id + ".json"), "w") as f:
         json.dump(schema, f, indent=2)
+
     if out_catalog:
         schema["selected"] = True
-        catalog = {"streams": [{"stream": schema_name,
-                                "tap_stream_id": schema_name,
+        catalog = {"streams": [{"stream": tap_stream_id,
+                                "tap_stream_id": tap_stream_id,
                                 "schema": schema
                                 }]}
-        with open(os.path.join(CONFIG["catalog_dir"], schema_name + ".json"), "w") as f:
+        with open(os.path.join(CONFIG["catalog_dir"], tap_stream_id + ".json"), "w") as f:
             json.dump(catalog, f, indent=2)
 
 
@@ -477,7 +489,7 @@ def parse_args(spec_file, required_config_keys):
             help=SPEC["args"][arg].get("help"),
             required=SPEC["args"][arg].get("required", False))
 
-    # Default singer arguments and commands
+    # Default singer arguments, commands, and required args
     parser.add_argument(
         '-c', '--config',
         help='Config file',
@@ -523,23 +535,29 @@ def main():
     '''Entry point'''
     spec_file = sys.argv[1]
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
+
     CONFIG.update(args.config)
 
     # Overwrite config specs with commandline args
+    # But we want to skip the args unspecified by the user...
+    # So the trick is to go back to sys.argv and find the args begins with "--"
+    # I can do this because I'm not allowing abbreviation of the args
     args_dict = args.__dict__
     for arg in args_dict.keys():
-        if args_dict[arg]:
-            CONFIG[arg] = args_dict[arg]
+        if "--" + arg not in sys.argv and CONFIG.get(arg) is not None:
+            continue
+        CONFIG[arg] = args_dict[arg]
 
     STATE = {}
-    schema = CONFIG["schema"]
-    tap_stream_id = CONFIG.get("tap_stream_id", CONFIG["schema"])
-    auth_method = CONFIG.get("auth_method", "basic")
+
+    auth_method = CONFIG.get("auth_method")
     max_page = CONFIG.get("max_page")
     LOGGER.info("auth_method=%s" % auth_method)
 
-    # TODO: support multiple streams
-    STREAMS[schema] = [Stream(schema, CONFIG)]
+    streams = CONFIG["streams"].split(",")
+    for stream in streams:
+        stream = stream.strip()
+        STREAMS[stream] = Stream(stream, CONFIG)
 
     if args.state:
         STATE.update(args.state)
@@ -548,9 +566,9 @@ def main():
     if args.discover:
         do_discover()
     elif args.catalog:
-        do_sync(STATE, args.catalog, schema, max_page, auth_method)
+        do_sync(STATE, args.catalog, max_page, auth_method)
     else:
-        LOGGER.info("No Streams were selected")
+        LOGGER.info("No streams were selected")
 
 if __name__ == "__main__":
     main()

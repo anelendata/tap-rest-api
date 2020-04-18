@@ -69,7 +69,11 @@ def _compare_props(prop1, prop2):
     return prop
 
 
-def infer_from_two(schema1, schema2):
+def _infer_from_two(schema1, schema2):
+    """
+    Compare between currently the most conservative and the new record schemas
+    and keep the more conservative one.
+    """
     if schema1 is None:
         return schema2
     if schema2 is None:
@@ -88,9 +92,12 @@ def infer_schema(obj, record_level=None):
     if type(obj[0]) is not dict:
         raise ValueError("Input must be a dict object.")
     schema = None
+    # Go through the entire list of objects and find the most safe type assumption
     for o in obj:
         cur_schema = _do_infer_schema(o, record_level)
-        schema = infer_from_two(schema, cur_schema)
+        # Compare between currently the most conservative and the new record
+        # and keep the more conservative.
+        schema = _infer_from_two(schema, cur_schema)
     schema["type"] = "object"
     return schema
 

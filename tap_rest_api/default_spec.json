@@ -9,11 +9,18 @@
             "help": "REST API endpoint with {params}. Required in config."
         },
 
+        "streams":
+        {
+            "type": "string",
+            "default": null,
+            "help": "comma-separated strings of tap stream IDs"
+        },
+
         "auth_method":
         {
             "type": "string",
             "default": "basic",
-            "help": "HTTP request authentication method: basic, digest, or ntlm"
+            "help": "HTTP request authentication method: no_auth, basic, digest, or ntlm"
         },
         "username":
         {
