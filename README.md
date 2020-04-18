@@ -38,7 +38,7 @@ Example (spec.json):
 }
 ```
 
-The args that are reserved default can be found [default_spec.json](./default_spec.json)
+The args that are reserved default can be found [default_spec.json](./tap_rest_api/default_spec.json)
 
 
 2. Create Config file from sample-config.json
