@@ -253,7 +253,8 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
     pretty_end = end
     if bookmark_type == "timestamp":
         pretty_start = str(start) + " (" + str(datetime.datetime.fromtimestamp(start)) + ")"
-        pretty_end = str(end) + " (" + str(datetime.datetime.fromtimestamp(end)) + ")"
+        if end is not None:
+            pretty_end = str(end) + " (" + str(datetime.datetime.fromtimestamp(end)) + ")"
 
     LOGGER.info("Stream %s has %s set starting %s and ending %s. I trust you set URL format contains those params. The behavior depends on the data source API's spec. I will not filter out the records outside the boundary. Every record received is will be written out." % (tap_stream_id, bookmark_type, pretty_start, pretty_end))
 
@@ -417,7 +418,7 @@ def do_infer_schema(out_catalog=True, add_tstamp=True):
     but that is not supported in this function yet.
     """
     # TODO: Support multiple streams specified by STREAM[]
-    tap_stream_id = STREAM[STREAM.keys()[0]].tap_stream_id
+    tap_stream_id = STREAMS[list(STREAMS.keys())[0]].tap_stream_id
 
     params = CONFIG
     page_number = 0
