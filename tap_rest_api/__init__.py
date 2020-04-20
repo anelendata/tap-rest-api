@@ -474,8 +474,13 @@ def parse_args(spec_file, required_config_keys):
     SPEC.update(default_spec)
 
     # Overwrite with the custom spec file
+    custom_spec = {}
     with open(spec_file, "r") as f:
-        SPEC.update(json.load(f))
+        custom_spec.update(json.load(f))
+
+    SPEC["application"] = custom_spec.get("application", SPEC["application"])
+    if custom_spec.get("args"):
+        SPEC["args"].update(custom_spec.get("args"))
 
     parser = argparse.ArgumentParser(SPEC["application"])
 
