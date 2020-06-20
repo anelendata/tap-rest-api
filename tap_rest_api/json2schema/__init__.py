@@ -35,7 +35,9 @@ def _do_infer_schema(obj, record_level=None):
             if type(obj) is str and re.match("(19|20)\d\d-(0[1-9]|1[012])-([1-9]|0[1-9]|[12][0-9]|3[01])", obj) is not None:
                 schema["format"] = "date-time"
         else:
-            if type(obj) == float or (type(obj) == str and "." in obj):
+            if type(obj) == bool:
+                schema["type"] = ["null", "boolean"]
+            elif type(obj) == float or (type(obj) == str and "." in obj):
                 schema["type"] = ["null", "number"]
             else:
                 schema["type"] = ["null", "integer"]
