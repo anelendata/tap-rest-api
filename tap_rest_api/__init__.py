@@ -109,10 +109,19 @@ def get_last_update(record, current):
             KeyError("timestamp_key not found in the record")
     elif CONFIG.get("datetime_key"):
         key = CONFIG["datetime_key"]
-        if (key in record) and (dateutil.parser.parse(record[key]) > dateutil.parser.parse(current)):
-            last_update = record[key]
-        else:
+        if key not in record:
             KeyError("datetime_key not found in the record")
+
+        record_datetime = dateutil.parser.parse(record[key])
+        if record_datetime.tzinfo is None:
+            record_datetime = record_datetime.replace(tzinfo=datetime.timezone.utc)
+
+        current_datetime = dateutil.parser.parse(current)
+        if current_datetime.tzinfo is None:
+            current_datetime = current_datetime.replace(tzinfo=datetime.timezone.utc)
+
+        if record_datetime > current_datetime:
+            last_update = record[key]
     elif CONFIG.get("index_key"):
         key = CONFIG["index_key"]
         r_str = str(record.get(key))
