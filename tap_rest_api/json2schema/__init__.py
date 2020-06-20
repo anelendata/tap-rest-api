@@ -81,7 +81,7 @@ def _infer_from_two(schema1, schema2):
     schema = schema2
     for key in schema1["properties"]:
         prop1 = schema1["properties"][key]
-        prop2 = schema2["properties"][key]
+        prop2 = schema2["properties"].get(key, prop1)
         schema["properties"][key] = _compare_props(prop1, prop2)
     return schema
 
