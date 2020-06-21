@@ -287,6 +287,7 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = etl_tstamp
                 last_update = get_last_update(row, last_update)
+
                 singer.write_record(tap_stream_id, row)
 
             LOGGER.info("Current page %d" % page_number)
@@ -330,8 +331,50 @@ def get_selected_streams(remaining_streams, annotated_schema):
     return selected_streams
 
 
-def do_sync(STATE, catalog, max_page=None, auth_method="basic"):
-    '''Sync the streams that were selected'''
+def output_raw_records(STATE, tap_stream_id, key_properties=[], auth_method=None, max_page=None):
+    """
+    Write out the raw JSON output at the record list level to stdout
+    """
+    start = get_start(STATE, tap_stream_id, "last_update")
+    end = get_end()
+
+    pretty_start = start
+    pretty_end = end
+    last_update = start
+    page_number = 1
+    offset_number = 0  # Offset is the number of records (vs. page)
+    etl_tstamp = int(time.time())
+    with metrics.record_counter(tap_stream_id) as counter:
+        while True:
+            params = CONFIG
+            params.update({"current_page": page_number})
+            params.update({"current_offset": offset_number})
+            endpoint = get_endpoint(tap_stream_id, params)
+            LOGGER.info("GET %s", endpoint)
+            rows = gen_request(tap_stream_id, endpoint, auth_method)
+            rows = get_record_list(rows, CONFIG.get("record_list_level"))
+            for row in rows:
+                counter.increment()
+                row = get_record(row, CONFIG.get("record_level"))
+                last_update = get_last_update(row, last_update)
+
+                sys.stdout.write(json.dumps(row) + "\n")
+
+            LOGGER.info("Current page %d" % page_number)
+            LOGGER.info("Current offset %d" % offset_number)
+
+            if len(rows) == 0 or (max_page and page_number + 1 > max_page):
+                break
+            else:
+                page_number +=1
+                offset_number += len(rows)
+
+
+def do_sync(STATE, catalog, max_page=None, auth_method="basic", raw=False):
+    """
+    Sync the streams that were selected
+    raw: Output raw JSON records to stdout
+    """
     start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(STREAMS, STATE)
     selected_streams = get_selected_streams(remaining_streams, catalog)
@@ -342,6 +385,11 @@ def do_sync(STATE, catalog, max_page=None, auth_method="basic"):
     LOGGER.info("Starting sync. Will sync these streams: %s", [stream.tap_stream_id for stream in selected_streams])
 
     for stream in selected_streams:
+        if raw:
+            # Output raw JSON records only
+            output_raw_records(STATE, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
+            continue
+
         LOGGER.info("Syncing %s", stream.tap_stream_id)
         singer.set_currently_syncing(STATE, stream.tap_stream_id)
         singer.write_state(STATE)
@@ -520,6 +568,11 @@ def parse_args(spec_file, required_config_keys):
 
     # commands
     parser.add_argument(
+        '-r', '--raw',
+        action='store_true',
+        help='Raw output at record level')
+
+    parser.add_argument(
         '-d', '--discover',
         action='store_true',
         help='Do schema discovery')
@@ -581,7 +634,7 @@ def main():
     if args.discover:
         do_discover()
     elif args.catalog:
-        do_sync(STATE, args.catalog, max_page, auth_method)
+        do_sync(STATE, args.catalog, max_page, auth_method, raw=args.raw)
     else:
         LOGGER.info("No streams were selected")
 
