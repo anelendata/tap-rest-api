@@ -63,6 +63,9 @@ def get_bookmark_type():
 
 
 def get_start(STATE, tap_stream_id, bookmark_key):
+    """
+    state file, given by --state <state_file> prioritizes over the start value given by config or args
+    """
     current_bookmark = singer.get_bookmark(STATE, tap_stream_id, bookmark_key)
     if current_bookmark is None:
         if CONFIG.get("timestamp_key"):
@@ -257,6 +260,13 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
 
     start = get_start(STATE, tap_stream_id, "last_update")
     end = get_end()
+    params = CONFIG
+    if CONFIG.get("timestamp_key"):
+        params.update({"start_timestamp": start})
+    elif CONFIG.get("datetime_key"):
+        params.update({"start_datetime": start})
+    elif CONFIG.get("index_key"):
+        params.update({"start_index": start})
 
     pretty_start = start
     pretty_end = end
@@ -273,7 +283,6 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
     etl_tstamp = int(time.time())
     with metrics.record_counter(tap_stream_id) as counter:
         while True:
-            params = CONFIG
             params.update({"current_page": page_number})
             params.update({"current_offset": offset_number})
             endpoint = get_endpoint(tap_stream_id, params)
@@ -308,11 +317,15 @@ def get_streams_to_sync(streams, state):
     '''Get the streams to sync'''
     current_stream = singer.get_currently_syncing(state)
     result = streams
+
     if current_stream:
-        result = list(itertools.dropwhile(
-            lambda x: x.tap_stream_id != current_stream, streams))
+        for key in result.keys():
+            if result[key].tap_stream_id != current_stream:
+                result.pop(key, None)
+
     if not result:
         raise Exception("Unknown stream {} in state".format(current_stream))
+
     return result
 
 
@@ -587,7 +600,11 @@ def parse_args(spec_file, required_config_keys):
     if args.config:
         args.config = utils.load_json(args.config)
     if args.state:
-        args.state = utils.load_json(args.state)
+        if os.path.exists(args.state):
+            args.state = utils.load_json(args.state)
+        else:
+            LOGGER.warn(args.state + " was not found.")
+            args.state = {}
     else:
         args.state = {}
     if args.catalog and os.path.isfile(args.catalog):
@@ -629,9 +646,11 @@ def main():
 
     if args.state:
         STATE.update(args.state)
+        LOGGER.info("State read: %s" % STATE)
+
     if args.infer_schema:
         do_infer_schema()
-    if args.discover:
+    elif args.discover:
         do_discover()
     elif args.catalog:
         do_sync(STATE, args.catalog, max_page, auth_method, raw=args.raw)
