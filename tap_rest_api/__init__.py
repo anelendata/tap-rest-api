@@ -124,7 +124,7 @@ def get_last_update(record, current):
             current_datetime = current_datetime.replace(tzinfo=datetime.timezone.utc)
 
         if record_datetime > current_datetime:
-            last_update = record[key]
+            last_update = record_datetime.isoformat()
     elif CONFIG.get("index_key"):
         key = CONFIG["index_key"]
         r_str = str(record.get(key))
