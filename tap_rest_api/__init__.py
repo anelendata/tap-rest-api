@@ -14,12 +14,24 @@ import singer.metrics as metrics
 from .json2schema import infer_schema
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
 SPEC_FILE = "./tap_rest_api_spec.json"
 SPEC = {}
 TYPES = {
     "string": str,
     "datetime": str,
-    "integer": int
+    "integer": int,
+    "boolean": str2bool
     }
 
 REQUIRED_CONFIG_KEYS = ["url"]
@@ -252,7 +264,13 @@ def gen_request(stream_id, url, auth_method="basic"):
         resp.raise_for_status()
         return resp.json()
 
-def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_page=None):
+def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_page=None, assume_sorted=True):
+    """
+    - max_page: Force sync to end after max_page. Mostly used for debugging.
+    - assume_sorted: Trust the data to be presorted by the index/timestamp/datetime keys
+                     so it is safe to finish the replication once the last update index/timestamp/datetime
+                     passes the end.
+    """
     schema = load_schema(tap_stream_id)
     singer.write_schema(tap_stream_id, schema, key_properties)
 
@@ -275,7 +293,16 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
         if end is not None:
             pretty_end = str(end) + " (" + str(datetime.datetime.fromtimestamp(end)) + ")"
 
-    LOGGER.info("Stream %s has %s set starting %s and ending %s. I trust you set URL format contains those params. The behavior depends on the data source API's spec. I will not filter out the records outside the boundary. Every record received is will be written out." % (tap_stream_id, bookmark_type, pretty_start, pretty_end))
+    LOGGER.info("""Stream %s has %s set starting %s and ending %s.
+I trust you set URL format contains those params. The behavior depends on the data source API's spec.
+I will not filter out the records outside the boundary. Every record received is will be written out.
+""" % (tap_stream_id, bookmark_type, pretty_start, pretty_end))
+
+    LOGGER.info("assume_sorted is set to %s" % assume_sorted)
+    if assume_sorted:
+        LOGGER.info("""I trust the data to be presorted by the index/timestamp/datetime keys.
+So it is safe to finish the replication once the last update index/timestamp/datetime passes the end.
+When in doubt, set this to False. Always perform post-replication dedup.""")
 
     last_update = start
     page_number = 1
@@ -297,12 +324,17 @@ def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_pag
                     row["_etl_tstamp"] = etl_tstamp
                 last_update = get_last_update(row, last_update)
 
-                singer.write_record(tap_stream_id, row)
+                if not end or last_update < end:
+                    singer.write_record(tap_stream_id, row)
 
             LOGGER.info("Current page %d" % page_number)
             LOGGER.info("Current offset %d" % offset_number)
 
             if len(rows) == 0 or (max_page and page_number + 1 > max_page):
+                LOGGER.info("Max page %d reached. Finishing the extraction.")
+                break
+            if assume_sorted and end and last_update >= end:
+                LOGGER.info("Record greater than %s and assume_sorted is set. Finishing the extraction." % (end))
                 break
             else:
                 page_number +=1
@@ -383,7 +415,7 @@ def output_raw_records(STATE, tap_stream_id, key_properties=[], auth_method=None
                 offset_number += len(rows)
 
 
-def do_sync(STATE, catalog, max_page=None, auth_method="basic", raw=False):
+def do_sync(STATE, catalog, assume_sorted=True, max_page=None, auth_method="basic", raw=False):
     """
     Sync the streams that were selected
     raw: Output raw JSON records to stdout
@@ -408,7 +440,7 @@ def do_sync(STATE, catalog, max_page=None, auth_method="basic", raw=False):
         singer.write_state(STATE)
 
         try:
-            STATE = sync_rows(STATE, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
+            STATE = sync_rows(STATE, stream.tap_stream_id, max_page=max_page, auth_method=auth_method, assume_sorted=assume_sorted)
         except Exception as e:
             LOGGER.critical(e)
             raise e
@@ -636,7 +668,9 @@ def main():
     STATE = {}
 
     auth_method = CONFIG.get("auth_method")
+    assume_sorted = CONFIG.get("assume_sorted")
     max_page = CONFIG.get("max_page")
+
     LOGGER.info("auth_method=%s" % auth_method)
 
     streams = CONFIG["streams"].split(",")
@@ -653,7 +687,7 @@ def main():
     elif args.discover:
         do_discover()
     elif args.catalog:
-        do_sync(STATE, args.catalog, max_page, auth_method, raw=args.raw)
+        do_sync(STATE, args.catalog, assume_sorted, max_page, auth_method, raw=args.raw)
     else:
         LOGGER.info("No streams were selected")
 

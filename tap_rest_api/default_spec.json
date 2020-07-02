@@ -22,6 +22,7 @@
             "default": "basic",
             "help": "HTTP request authentication method: no_auth, basic, digest, or ntlm"
         },
+
         "username":
         {
             "type": "string",
@@ -110,6 +111,12 @@
             "type": "integer",
             "default": 100,
             "help": "# of items per page if API supports paging"
+        },
+        "assume_sorted":
+        {
+            "type": "boolean",
+            "default": true,
+            "help": "If true, trust the source data to be presorted by the index/timestamp/datetime keys. So it is safe to finish the replication once the last update index/timestamp/datetime passes the end."
         },
         "max_page":
         {
