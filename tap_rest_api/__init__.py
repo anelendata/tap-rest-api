@@ -264,6 +264,7 @@ def gen_request(stream_id, url, auth_method="basic"):
         resp.raise_for_status()
         return resp.json()
 
+
 def sync_rows(STATE, tap_stream_id, key_properties=[], auth_method=None, max_page=None, assume_sorted=True):
     """
     - max_page: Force sync to end after max_page. Mostly used for debugging.
@@ -312,28 +313,37 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
         while True:
             params.update({"current_page": page_number})
             params.update({"current_offset": offset_number})
+            params.update({"last_update": last_update})
+
             endpoint = get_endpoint(tap_stream_id, params)
             LOGGER.info("GET %s", endpoint)
+
             rows = gen_request(tap_stream_id, endpoint, auth_method)
             rows = get_record_list(rows, CONFIG.get("record_list_level"))
+
+            LOGGER.info("Current page %d" % page_number)
+            LOGGER.info("Current offset %d" % offset_number)
+
             for row in rows:
                 counter.increment()
                 row = get_record(row, CONFIG.get("record_level"))
                 row = filter_result(row, schema)
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = etl_tstamp
-                last_update = get_last_update(row, last_update)
 
-                if not end or last_update < end:
+                next_last_update = get_last_update(row, last_update)
+
+                if not end or next_last_update < end:
+                    last_update = next_last_update
                     singer.write_record(tap_stream_id, row)
 
-            LOGGER.info("Current page %d" % page_number)
-            LOGGER.info("Current offset %d" % offset_number)
-
-            if len(rows) == 0 or (max_page and page_number + 1 > max_page):
+            if len(rows) < CONFIG["items_per_page"]:
+                LOGGER.info("Response is less than set item per page (%d). Finishing the extraction" % CONFIG["items_per_page"])
+                break
+            if max_page and page_number + 1 > max_page:
                 LOGGER.info("Max page %d reached. Finishing the extraction.")
                 break
-            if assume_sorted and end and last_update >= end:
+            if assume_sorted and end and next_last_update >= end:
                 LOGGER.info("Record greater than %s and assume_sorted is set. Finishing the extraction." % (end))
                 break
             else:
