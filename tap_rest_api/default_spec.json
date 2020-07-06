@@ -129,7 +129,7 @@
             "type": "boolean",
             "default": true,
             "help": "Filter the records read from the source according to schema. Any fields not present in shema will be removed."
-        }
+        },
 
         "record_list_level":
         {
