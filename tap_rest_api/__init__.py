@@ -126,8 +126,10 @@ def parse_args(spec_file, required_config_keys):
             args.state = {}
     else:
         args.state = {}
-    if args.catalog and os.path.isfile(args.catalog):
-            args.catalog = Catalog.load(args.catalog)
+    if args.catalog:
+        if not os.path.isfile(args.catalog):
+            raise Exception("Catalog file %s not found" % args.catalog)
+        args.catalog = Catalog.load(args.catalog)
 
     utils.check_config(args.config, required_config_keys)
 
