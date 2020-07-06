@@ -159,6 +159,7 @@ def main():
     auth_method = CONFIG.get("auth_method")
     assume_sorted = CONFIG.get("assume_sorted")
     max_page = CONFIG.get("max_page")
+    filter_by_schema = CONFIG.get("filter_by_schema")
 
     LOGGER.info("auth_method=%s" % auth_method)
 
@@ -176,7 +177,8 @@ def main():
     elif args.discover:
         discover(CONFIG, STREAMS)
     elif args.catalog:
-        sync(CONFIG, STREAMS, STATE, args.catalog, assume_sorted, max_page, auth_method, raw=args.raw)
+        sync(CONFIG, STREAMS, STATE, args.catalog, assume_sorted, max_page,
+             auth_method, raw=args.raw, filter_by_schema=filter_by_schema)
     else:
         LOGGER.info("No streams were selected")
 

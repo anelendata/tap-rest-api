@@ -14,7 +14,8 @@ LOGGER = singer.get_logger()
 
 
 def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
-              max_page=None, assume_sorted=True, raw_output=False):
+              max_page=None, assume_sorted=True, filter_by_schema=True,
+              raw_output=False):
     """
     - max_page: Force sync to end after max_page. Mostly used for debugging.
     - assume_sorted: Trust the data to be presorted by the index/timestamp/datetime keys
@@ -80,7 +81,9 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
 
                 record = get_record(row, config.get("record_level"))
 
-                record = filter_result(record, schema)
+                if filter_by_schema:
+                    record = filter_result(record, schema)
+
                 if "_etl_tstamp" in schema["properties"].keys():
                     record["_etl_tstamp"] = etl_tstamp
 
@@ -116,7 +119,8 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
     return state
 
 
-def sync(config, streams, state, catalog, assume_sorted=True, max_page=None, auth_method="basic", raw=False):
+def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
+         auth_method="basic", raw=False, filter_by_schema=True):
     """
     Sync the streams that were selected
 
@@ -140,7 +144,9 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None, aut
             singer.write_state(state)
 
         try:
-            state = sync_rows(config, state, stream.tap_stream_id, max_page=max_page, auth_method=auth_method, assume_sorted=assume_sorted, raw_output=raw)
+            state = sync_rows(config, state, stream.tap_stream_id, max_page=max_page,
+                              auth_method=auth_method, assume_sorted=assume_sorted,
+                              raw_output=raw, filter_by_schema=filter_by_schema)
         except Exception as e:
             LOGGER.critical(e)
             raise e

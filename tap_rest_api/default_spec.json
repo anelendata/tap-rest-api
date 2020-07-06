@@ -124,6 +124,12 @@
             "default": null,
             "help": "If set, stop polling after max_page"
         },
+        "filter_by_schema":
+        {
+            "type": "boolean",
+            "default": true,
+            "help": "Filter the records read from the source according to schema. Any fields not present in shema will be removed."
+        }
 
         "record_list_level":
         {
