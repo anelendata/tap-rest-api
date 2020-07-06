@@ -5,7 +5,7 @@ import singer.metrics as metrics
 
 from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
                      get_last_update, get_record, get_record_list, get_selected_streams,
-                     get_start, get_streams_to_sync, get_tzinfo)
+                     get_start, get_streams_to_sync)
 from .schema import filter_result, load_schema
 
 
@@ -20,7 +20,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                      so it is safe to finish the replication once the last update index/timestamp/datetime
                      passes the end.
     """
-    schema = load_schema(config, tap_stream_id)
+    schema = load_schema(config["schema_dir"], tap_stream_id)
     singer.write_schema(tap_stream_id, schema, key_properties)
 
     bookmark_type = get_bookmark_type(config)
@@ -63,10 +63,10 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
             params.update({"current_offset": offset_number})
             params.update({"last_update": last_update})
 
-            endpoint = get_endpoint(config, tap_stream_id, params)
+            endpoint = get_endpoint(config["url"], tap_stream_id, params)
             LOGGER.info("GET %s", endpoint)
 
-            rows = generate_request(config, tap_stream_id, endpoint, auth_method)
+            rows = generate_request(tap_stream_id, endpoint, auth_method, config["username"], config["password"])
             rows = get_record_list(rows, config.get("record_list_level"))
 
             LOGGER.info("Current page %d" % page_number)
@@ -75,7 +75,7 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
             for row in rows:
                 counter.increment()
                 row = get_record(row, config.get("record_level"))
-                row = filter_result(config, row, schema)
+                row = filter_result(row, schema)
                 if "_etl_tstamp" in schema["properties"].keys():
                     row["_etl_tstamp"] = etl_tstamp
 
@@ -121,9 +121,9 @@ def output_raw_records(config, state, tap_stream_id, key_properties=[], auth_met
             params = config
             params.update({"current_page": page_number})
             params.update({"current_offset": offset_number})
-            endpoint = get_endpoint(config, tap_stream_id, params)
+            endpoint = get_endpoint(config["url"], tap_stream_id, params)
             LOGGER.info("GET %s", endpoint)
-            rows = generate_request(config, tap_stream_id, endpoint, auth_method)
+            rows = generate_request(tap_stream_id, endpoint, auth_method, config["username"], config["password"])
             rows = get_record_list(rows, config.get("record_list_level"))
             for row in rows:
                 counter.increment()
@@ -183,4 +183,3 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None, aut
     end_process_at = datetime.datetime.now()
     LOGGER.info("Completed sync at %s" % str(end_process_at))
     LOGGER.info("Process duration: " + str(end_process_at - start_process_at))
-

@@ -1,6 +1,7 @@
-import attr, backoff, dateutil, datetime, os, pytz, requests
+import attr, backoff, dateutil, datetime, os, requests
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 # from requests_ntlm import HTTPNtlmAuth
+from dateutil.tz import tzoffset
 
 import singer
 from singer import utils
@@ -56,7 +57,7 @@ def get_record_list(data, record_list_level):
     return data
 
 
-def get_endpoint(config, tap_stream_id, kwargs):
+def get_endpoint(url_format, tap_stream_id, kwargs):
     """ Get the full url for the endpoint
     In addition to params passed from config values, it will create "resource"
     that is derived from tap_stream_id.
@@ -65,7 +66,7 @@ def get_endpoint(config, tap_stream_id, kwargs):
     """
     params = {"resource": tap_stream_id}
     params.update(kwargs)
-    return config["url"].format(**kwargs)
+    return url_format.format(**kwargs)
 
 
 def giveup(exc):
@@ -76,15 +77,15 @@ def giveup(exc):
 
 @utils.backoff((backoff.expo,requests.exceptions.RequestException), giveup)
 @utils.ratelimit(20, 1)
-def generate_request(config, stream_id, url, auth_method="basic"):
+def generate_request(stream_id, url, auth_method="basic", username=None, password=None):
     if not auth_method or auth_method == "no_auth":
         auth=None
     elif auth_method == "basic":
-        auth=HTTPBasicAuth(config["username"], config["password"])
+        auth=HTTPBasicAuth(username, password)
     elif auth_method == "digest":
-        auth=HTTPDigestAuth(config["username"], config["password"])
+        auth=HTTPDigestAuth(username, password)
     elif auth_method == "ntlm":
-        auth=HTTPNtlmAuth(config["username"], config["password"])
+        auth=HTTPNtlmAuth(username, password)
     else:
         raise ValueError("Unknown auth method: " + auth_method)
 
@@ -110,9 +111,11 @@ def get_bookmark_type(config):
     raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
 
 
-def get_tzinfo(config):
-    return pytz.utc
-    # dateutil.parser.parse(config[datetime_param]).tzinfo
+def parse_datetime_tz(datetime_str, default_tz_offset=0):
+    d = dateutil.parser.parse(datetime_str)
+    if not d.tzinfo:
+        d = d.replace(tzinfo=tzoffset(None, default_tz_offset))
+    return d
 
 
 def get_start(config, STATE, tap_stream_id, bookmark_key):
@@ -168,13 +171,8 @@ def get_last_update(config, record, current):
         if key not in record:
             KeyError("datetime_key not found in the record")
 
-        record_datetime = dateutil.parser.parse(record[key])
-        if record_datetime.tzinfo is None:
-            record_datetime = record_datetime.replace(tzinfo=datetime.timezone.utc)
-
-        current_datetime = dateutil.parser.parse(current)
-        if current_datetime.tzinfo is None:
-            current_datetime = current_datetime.replace(tzinfo=datetime.timezone.utc)
+        record_datetime = parse_datetime_tz(record[key])
+        current_datetime = parse_datetime_tz(current)
 
         if record_datetime > current_datetime:
             last_update = record_datetime.isoformat()
