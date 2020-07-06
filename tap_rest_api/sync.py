@@ -4,16 +4,17 @@ import singer
 import singer.metrics as metrics
 
 from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
-                     get_last_update, get_record, get_record_list, get_selected_streams,
-                     get_start, get_streams_to_sync)
+                     get_init_endpoint_params, get_last_update, get_record,
+                     get_record_list, get_selected_streams, get_start,
+                     get_streams_to_sync)
 from .schema import filter_result, load_schema
-
 
 
 LOGGER = singer.get_logger()
 
 
-def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None, max_page=None, assume_sorted=True):
+def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
+              max_page=None, assume_sorted=True, raw_output=False):
     """
     - max_page: Force sync to end after max_page. Mostly used for debugging.
     - assume_sorted: Trust the data to be presorted by the index/timestamp/datetime keys
@@ -21,19 +22,16 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                      passes the end.
     """
     schema = load_schema(config["schema_dir"], tap_stream_id)
-    singer.write_schema(tap_stream_id, schema, key_properties)
+
+    if raw_output is False:
+        singer.write_schema(tap_stream_id, schema, key_properties)
 
     bookmark_type = get_bookmark_type(config)
 
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config)
-    params = config
-    if config.get("timestamp_key"):
-        params.update({"start_timestamp": start})
-    elif config.get("datetime_key"):
-        params.update({"start_datetime": start})
-    elif config.get("index_key"):
-        params.update({"start_index": start})
+
+    params = get_init_endpoint_params(config, state, tap_stream_id)
 
     pretty_start = start
     pretty_end = end
@@ -57,6 +55,7 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
     page_number = 1
     offset_number = 0  # Offset is the number of records (vs. page)
     etl_tstamp = int(time.time())
+    prev_written_row = None
     with metrics.record_counter(tap_stream_id) as counter:
         while True:
             params.update({"current_page": page_number})
@@ -73,17 +72,29 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
             LOGGER.info("Current offset %d" % offset_number)
 
             for row in rows:
-                counter.increment()
-                row = get_record(row, config.get("record_level"))
-                row = filter_result(row, schema)
-                if "_etl_tstamp" in schema["properties"].keys():
-                    row["_etl_tstamp"] = etl_tstamp
+                # When we rely on index/datetime/timestamp to parse the next GET URL,
+                # we get the record we have already seen in the current process.
+                if row == prev_written_row:
+                    LOGGER.debug("Skipping the duplicated row %s" % row)
+                    continue
 
-                next_last_update = get_last_update(config, row, last_update)
+                record = get_record(row, config.get("record_level"))
+
+                record = filter_result(record, schema)
+                if "_etl_tstamp" in schema["properties"].keys():
+                    record["_etl_tstamp"] = etl_tstamp
+
+                next_last_update = get_last_update(config, record, last_update)
 
                 if not end or next_last_update < end:
                     last_update = next_last_update
-                    singer.write_record(tap_stream_id, row)
+                    if raw_output:
+                        sys.stdout.write(json.dumps(record) + "\n")
+                    else:
+                        singer.write_record(tap_stream_id, record)
+                    # For now, increment only when we write
+                    counter.increment()
+                    prev_written_row = row
 
             if len(rows) < config["items_per_page"]:
                 LOGGER.info("Response is less than set item per page (%d). Finishing the extraction" % config["items_per_page"])
@@ -99,47 +110,10 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
                 offset_number += len(rows)
 
     state = singer.write_bookmark(state, tap_stream_id, 'last_update', last_update)
-    singer.write_state(state)
+    if raw_output == False:
+        singer.write_state(state)
+
     return state
-
-
-def output_raw_records(config, state, tap_stream_id, key_properties=[], auth_method=None, max_page=None):
-    """
-    Write out the raw JSON output at the record list level to stdout
-    """
-    start = get_start(config, state, tap_stream_id, "last_update")
-    end = get_end(config)
-
-    pretty_start = start
-    pretty_end = end
-    last_update = start
-    page_number = 1
-    offset_number = 0  # Offset is the number of records (vs. page)
-    etl_tstamp = int(time.time())
-    with metrics.record_counter(tap_stream_id) as counter:
-        while True:
-            params = config
-            params.update({"current_page": page_number})
-            params.update({"current_offset": offset_number})
-            endpoint = get_endpoint(config["url"], tap_stream_id, params)
-            LOGGER.info("GET %s", endpoint)
-            rows = generate_request(tap_stream_id, endpoint, auth_method, config["username"], config["password"])
-            rows = get_record_list(rows, config.get("record_list_level"))
-            for row in rows:
-                counter.increment()
-                row = get_record(row, config.get("record_level"))
-                last_update = get_last_update(config, row, last_update)
-
-                sys.stdout.write(json.dumps(row) + "\n")
-
-            LOGGER.info("Current page %d" % page_number)
-            LOGGER.info("Current offset %d" % offset_number)
-
-            if len(rows) == 0 or (max_page and page_number + 1 > max_page):
-                break
-            else:
-                page_number +=1
-                offset_number += len(rows)
 
 
 def sync(config, streams, state, catalog, assume_sorted=True, max_page=None, auth_method="basic", raw=False):
@@ -158,17 +132,15 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None, aut
     LOGGER.info("Starting sync. Will sync these streams: %s", [stream.tap_stream_id for stream in selected_streams])
 
     for stream in selected_streams:
-        if raw:
-            # Output raw JSON records only
-            output_raw_records(config, state, stream.tap_stream_id, max_page=max_page, auth_method=auth_method)
-            continue
-
         LOGGER.info("Syncing %s", stream.tap_stream_id)
+
+
         singer.set_currently_syncing(state, stream.tap_stream_id)
-        singer.write_state(state)
+        if raw is False:
+            singer.write_state(state)
 
         try:
-            state = sync_rows(config, state, stream.tap_stream_id, max_page=max_page, auth_method=auth_method, assume_sorted=assume_sorted)
+            state = sync_rows(config, state, stream.tap_stream_id, max_page=max_page, auth_method=auth_method, assume_sorted=assume_sorted, raw_output=raw)
         except Exception as e:
             LOGGER.critical(e)
             raise e

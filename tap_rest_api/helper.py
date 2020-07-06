@@ -57,6 +57,24 @@ def get_record_list(data, record_list_level):
     return data
 
 
+def get_init_endpoint_params(config, state, tap_stream_id):
+    params = config
+    start = get_start(config, state, tap_stream_id, "last_update")
+
+    if config.get("timestamp_key"):
+        params.update({"start_timestamp": start})
+    elif config.get("datetime_key"):
+        params.update({"start_datetime": start})
+    elif config.get("index_key"):
+        params.update({"start_index": start})
+
+    params.update({"current_page": 0})
+    params.update({"current_offset": 0})
+    params.update({"last_update": start})
+
+    return params
+
+
 def get_endpoint(url_format, tap_stream_id, kwargs):
     """ Get the full url for the endpoint
     In addition to params passed from config values, it will create "resource"

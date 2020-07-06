@@ -3,8 +3,8 @@ import dateutil, json, os, sys
 import singer
 from singer import utils
 
-from .helper import (generate_request, get_endpoint, get_record, get_record_list,
-                     nested_get, parse_datetime_tz)
+from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
+                     get_record, get_record_list, nested_get, parse_datetime_tz)
 from . import json2schema
 
 
@@ -103,11 +103,8 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     # TODO: Support multiple streams specified by STREAM[]
     tap_stream_id = streams[list(streams.keys())[0]].tap_stream_id
 
-    params = config
-    page_number = 0
-    offset_number = 0
-    params.update({"current_page": page_number})
-    params.update({"current_offset": offset_number})
+    params = get_init_endpoint_params(config, {}, tap_stream_id)
+
     endpoint = get_endpoint(config["url"], tap_stream_id, params)
     LOGGER.info("GET %s", endpoint)
     auth_method = config.get("auth_method", "basic")
