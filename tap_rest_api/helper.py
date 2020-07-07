@@ -1,4 +1,5 @@
 import attr, backoff, dateutil, datetime, os, requests
+from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 # from requests_ntlm import HTTPNtlmAuth
 from dateutil.tz import tzoffset
@@ -76,15 +77,23 @@ def get_init_endpoint_params(config, state, tap_stream_id):
 
 
 def get_endpoint(url_format, tap_stream_id, kwargs):
-    """ Get the full url for the endpoint
-    In addition to params passed from config values, it will create "resource"
+    """ Get the full url for the endpoint including query
+
+    In addition to kwargs passed from config values, it will create "resource"
     that is derived from tap_stream_id.
+
+    The special characters in query are quoted with "%XX"
+
     URL can be something like:
-    https://api.example.com/1/{resource}?last_update_start={start_datetime}&last_update_end={end_datetime}&items_per_page={items_per_page}&page={current_page}
+        https://api.example.com/1/{resource}? \
+            last_update_start={start_datetime}&last_update_end={end_datetime}& \
+            items_per_page={items_per_page}&page={current_page}
     """
-    params = {"resource": tap_stream_id}
-    params.update(kwargs)
-    return url_format.format(**kwargs)
+    params = dict()
+    for key in kwargs:
+        params[key] = urlquote(str(kwargs[key]).encode("utf-8"))
+    params["resource"] = urlquote(str(tap_stream_id).encode("utf-8"))
+    return url_format.format(**params)
 
 
 def giveup(exc):
@@ -96,6 +105,9 @@ def giveup(exc):
 @utils.backoff((backoff.expo,requests.exceptions.RequestException), giveup)
 @utils.ratelimit(20, 1)
 def generate_request(stream_id, url, auth_method="basic", username=None, password=None):
+    """
+    url: URL with pre-encoded query. See get_endpoint()
+    """
     if not auth_method or auth_method == "no_auth":
         auth=None
     elif auth_method == "basic":
