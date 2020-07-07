@@ -4,58 +4,18 @@ import singer
 from singer import utils
 
 from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
-                     get_record, get_record_list, nested_get, parse_datetime_tz)
+                     get_record, get_record_list)
 from . import json2schema
 
 
 LOGGER = singer.get_logger()
 
 
-def _do_filter(obj, dict_path, schema):
-    if not obj:
-        return None
-    obj_type = nested_get(schema, dict_path + ["type"])
-    obj_format = nested_get(schema, dict_path + ["format"])
-    if obj_type is None:
-        return None
-    if type(obj_type) is list:
-        obj_type = obj_type[1]
-
-    if obj_type == "object":
-        assert(type(obj) is dict and obj.keys())
-        filtered = dict()
-        for key in obj.keys():
-            ret = _do_filter(obj[key], dict_path + ["properties", key], schema)
-            if ret:
-                filtered[key] = ret
-    elif obj_type == "array":
-        assert(type(obj) is list)
-        filtered = list()
-        for o in obj:
-            ret = _do_filter(o, dict_path + ["items"], schema)
-            if ret:
-                filtered.append(ret)
-    else:
-        if obj_type == "string":
-            filtered = str(obj)
-            if obj_format == "date-time":
-                filtered = parse_datetime_tz(obj, default_tz_offset=0).isoformat()
-        elif obj_type == "number":
-            try:
-                filtered = float(obj)
-            except ValueError as e:
-                LOGGER.error(str(e) + "dict_path" + str(dict_path) + " object type: " + obj_type)
-                raise
-        else:
-            filtered = obj
-    return filtered
-
-
-def filter_result(row, schema):
+def filter_record(row, schema, on_invalid_property="force"):
     """
     Parse the result into types
     """
-    return _do_filter(row, [], schema)
+    return json2schema.filter_object(row, schema, on_invalid_property=on_invalid_property)
 
 
 def load_schema(schema_dir, entity):

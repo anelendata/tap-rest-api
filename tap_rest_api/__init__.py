@@ -138,8 +138,15 @@ def parse_args(spec_file, required_config_keys):
 
 @utils.handle_top_exception(LOGGER)
 def main():
-    '''Entry point'''
+    """
+    Entry point of tap_rest_api
+    """
+    if len(sys.argv) < 2:
+        raise Exception("The first argument must specify the spec file.")
     spec_file = sys.argv[1]
+    if not os.path.isfile(spec_file):
+        raise Exception("Spec file %s not found" % spec_file)
+
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
 
     CONFIG.update(args.config)
@@ -161,8 +168,6 @@ def main():
     max_page = CONFIG.get("max_page")
     filter_by_schema = CONFIG.get("filter_by_schema")
 
-    LOGGER.info("auth_method=%s" % auth_method)
-
     streams = CONFIG["streams"].split(",")
     for stream in streams:
         stream = stream.strip()
@@ -170,7 +175,7 @@ def main():
 
     if args.state:
         STATE.update(args.state)
-        LOGGER.info("State read: %s" % STATE)
+        LOGGER.debug("State read: %s" % STATE)
 
     if args.infer_schema:
         infer_schema(CONFIG, STREAMS)
@@ -180,7 +185,7 @@ def main():
         sync(CONFIG, STREAMS, STATE, args.catalog, assume_sorted, max_page,
              auth_method, raw=args.raw, filter_by_schema=filter_by_schema)
     else:
-        LOGGER.info("No streams were selected")
+        raise Exception("No streams were selected")
 
 
 if __name__ == "__main__":

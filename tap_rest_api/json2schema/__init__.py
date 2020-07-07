@@ -1,4 +1,5 @@
-import json, sys, re
+import dateutil, json, sys, re
+from dateutil.tz import tzoffset
 
 # JSON schema follows:
 # https://json-schema.org/
@@ -102,6 +103,104 @@ def infer_schema(obj, record_level=None):
         schema = _infer_from_two(schema, cur_schema)
     schema["type"] = "object"
     return schema
+
+
+def _nested_get(input_dict, nested_key):
+    internal_dict_value = input_dict
+    for k in nested_key:
+        internal_dict_value = internal_dict_value.get(k, None)
+        if internal_dict_value is None:
+            return None
+    return internal_dict_value
+
+
+def _parse_datetime_tz(datetime_str, default_tz_offset=0):
+    d = dateutil.parser.parse(datetime_str)
+    if not d.tzinfo:
+        d = d.replace(tzinfo=tzoffset(None, default_tz_offset))
+    return d
+
+
+def _on_invalid_property(policy, dict_path, obj_type, obj, err_msg):
+    if policy == "raise":
+        raise Exception(err_msg + " dict_path" + str(dict_path) + " object type: " + obj_type + " object: " + str(obj))
+    elif policy == "force":
+        filtered = str(obj)
+    elif policy == "null":
+        filtered = None
+    else:
+        raise ValueError("Unknown policy: %s" % policy)
+    return filtered
+
+
+def filter_object(obj, schema, dict_path=[], on_invalid_property="raise"):
+    """
+    Check the object against the schema.
+    Convert the fields into the proper object types.
+    """
+    invalid_actions = ["raise", "null", "force"]
+    if not on_invalid_property in invalid_actions:
+        raise ValueError("on_invalid_property is not one of %s" % invalid_actions)
+
+    obj_type = _nested_get(schema, dict_path + ["type"])
+    obj_format = _nested_get(schema, dict_path + ["format"])
+
+    nullable = False
+    if obj_type is None:
+        if on_invalid_property == "raise":
+            raise ValueError("Unknown property found at: %s" % dict_path)
+        return None
+    if type(obj_type) is list:
+        nullable = (obj_type == "null")
+        obj_type = obj_type[1]
+
+    if obj is None:
+        if not nullable:
+            if on_invalid_property == "raise":
+                raise ValueError("Null object given at %s" % dict_path)
+            return None
+
+    # Recurse if object or array types
+    if obj_type == "object":
+        assert(type(obj) is dict and obj.keys())
+        filtered = dict()
+        for key in obj.keys():
+            ret = filter_object(obj[key], schema, dict_path + ["properties", key], on_invalid_property)
+            if ret:
+                filtered[key] = ret
+    elif obj_type == "array":
+        assert(type(obj) is list)
+        filtered = list()
+        for o in obj:
+            ret = filter_object(o, schema, dict_path + ["items"], on_invalid_property)
+            if ret:
+                filtered.append(ret)
+    else:
+        if obj_type == "string":
+            filtered = str(obj)
+            if obj_format == "date-time":
+                try:
+                    filtered = _parse_datetime_tz(obj, default_tz_offset=0).isoformat()
+                except Exception as e:
+                    filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+        elif obj_type == "number":
+            try:
+                filtered = float(obj)
+            except ValueError as e:
+                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+        elif obj_type == "integer":
+            try:
+                filtered = int(obj)
+            except ValueError as e:
+                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+        elif obj_type == "boolean":
+            if str(obj).lower() == "true":
+                filtered = True
+            elif str(obj).lower() == "false":
+                filtered = False
+            else:
+                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+    return filtered
 
 
 if __name__ == "__main__":

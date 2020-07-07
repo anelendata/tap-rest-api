@@ -1,7 +1,6 @@
 import attr, backoff, dateutil, datetime, os, requests
 from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
-# from requests_ntlm import HTTPNtlmAuth
 from dateutil.tz import tzoffset
 
 import singer
@@ -22,15 +21,6 @@ class Stream(object):
 def get_abs_path(path):
     """Returns the absolute path"""
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
-
-
-def nested_get(input_dict, nested_key):
-    internal_dict_value = input_dict
-    for k in nested_key:
-        internal_dict_value = internal_dict_value.get(k, None)
-        if internal_dict_value is None:
-            return None
-    return internal_dict_value
 
 
 def get_record(raw_item, record_level):
@@ -114,8 +104,6 @@ def generate_request(stream_id, url, auth_method="basic", username=None, passwor
         auth=HTTPBasicAuth(username, password)
     elif auth_method == "digest":
         auth=HTTPDigestAuth(username, password)
-    elif auth_method == "ntlm":
-        auth=HTTPNtlmAuth(username, password)
     else:
         raise ValueError("Unknown auth method: " + auth_method)
 
