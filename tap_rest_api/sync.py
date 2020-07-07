@@ -54,7 +54,7 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
 
     LOGGER.info("filter_by_schema is set to %s." % filter_by_schema)
     if filter_by_schema is False:
-        LOGGEr.info("   The fields undefined/not-conforming to the schema will be written out." % filter_by_schema)
+        LOGGER.info("   The fields undefined/not-conforming to the schema will be written out.")
 
     last_update = start
     page_number = 1
