@@ -48,15 +48,29 @@ I will not filter out the records outside the boundary. Every record received is
 
     LOGGER.info("assume_sorted is set to %s" % assume_sorted)
     if assume_sorted:
-        LOGGER.info("""I trust the data to be presorted by the index/timestamp/datetime keys.
+        LOGGER.info("""    I trust the data to be presorted by the index/timestamp/datetime keys.
 So it is safe to finish the replication once the last update index/timestamp/datetime passes the end.
 When in doubt, set this to False. Always perform post-replication dedup.""")
+
+    LOGGER.info("filter_by_schema is set to %s." % filter_by_schema)
+    if filter_by_schema is False:
+        LOGGEr.info("   The fields undefined/not-conforming to the schema will be written out." % filter_by_schema)
 
     last_update = start
     page_number = 1
     offset_number = 0  # Offset is the number of records (vs. page)
     etl_tstamp = int(time.time())
-    prev_written_row = None
+
+    # When we rely on index/datetime/timestamp to parse the next GET URL,
+    # we get the record we have already seen in the current process.
+    # When we get last_record_extracted from state file, we can also
+    # compare with the previous process to further avoiding duplicated
+    # records in the target data store.
+    prev_written_record = None
+    last_record_extracted = singer.get_bookmark(state, tap_stream_id, "last_record_extracted")
+    if last_record_extracted:
+        prev_written_record = json.loads(last_record_extracted)
+
     with metrics.record_counter(tap_stream_id) as counter:
         while True:
             params.update({"current_page": page_number})
@@ -73,16 +87,14 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
             LOGGER.info("Current offset %d" % offset_number)
 
             for row in rows:
-                # When we rely on index/datetime/timestamp to parse the next GET URL,
-                # we get the record we have already seen in the current process.
-                if row == prev_written_row:
-                    LOGGER.debug("Skipping the duplicated row %s" % row)
-                    continue
-
                 record = get_record(row, config.get("record_level"))
-
                 if filter_by_schema:
                     record = filter_result(record, schema)
+
+                # It's important to compare the record before adding _etl_tstamp
+                if record == prev_written_record:
+                    LOGGER.debug("Skipping the duplicated row %s" % record)
+                    continue
 
                 if "_etl_tstamp" in schema["properties"].keys():
                     record["_etl_tstamp"] = etl_tstamp
@@ -90,14 +102,15 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
                 next_last_update = get_last_update(config, record, last_update)
 
                 if not end or next_last_update < end:
-                    last_update = next_last_update
                     if raw_output:
                         sys.stdout.write(json.dumps(record) + "\n")
                     else:
                         singer.write_record(tap_stream_id, record)
                     # For now, increment only when we write
                     counter.increment()
-                    prev_written_row = row
+                    last_update = next_last_update
+                    record.pop("_etl_tstamp")
+                    prev_written_record = record
 
             if len(rows) < config["items_per_page"]:
                 LOGGER.info("Response is less than set item per page (%d). Finishing the extraction" % config["items_per_page"])
@@ -112,7 +125,10 @@ When in doubt, set this to False. Always perform post-replication dedup.""")
                 page_number +=1
                 offset_number += len(rows)
 
-    state = singer.write_bookmark(state, tap_stream_id, 'last_update', last_update)
+    state = singer.write_bookmark(state, tap_stream_id, "last_update", last_update)
+    if prev_written_record:
+        state = singer.write_bookmark(state, tap_stream_id, "last_record_extracted", json.dumps(prev_written_record))
+
     if raw_output == False:
         singer.write_state(state)
 

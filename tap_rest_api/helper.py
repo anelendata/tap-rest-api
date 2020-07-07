@@ -148,11 +148,11 @@ def parse_datetime_tz(datetime_str, default_tz_offset=0):
     return d
 
 
-def get_start(config, STATE, tap_stream_id, bookmark_key):
+def get_start(config, state, tap_stream_id, bookmark_key):
     """
     state file, given by --state <state_file> prioritizes over the start value given by config or args
     """
-    current_bookmark = singer.get_bookmark(STATE, tap_stream_id, bookmark_key)
+    current_bookmark = singer.get_bookmark(state, tap_stream_id, bookmark_key)
     if current_bookmark is None:
         if config.get("timestamp_key"):
             if not config.get("start_timestamp") and not config.get("start_datetime"):
