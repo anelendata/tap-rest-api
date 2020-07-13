@@ -1,2 +1,1 @@
-include tap_rest_api/schemas/*.json
-include tap_rest_api/json2schema/*
+include tap_rest_api/default_spec.json

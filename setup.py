@@ -22,7 +22,7 @@ setup(
     """,
     packages=["tap_rest_api"],
     package_data = {
-        # "schemas": ["tap_rest_api/schemas/*.json"]
+        # Use MANIFEST.ini
     },
-    include_package_data=False
+    include_package_data=True
 )
