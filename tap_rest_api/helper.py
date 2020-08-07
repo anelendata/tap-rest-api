@@ -153,7 +153,7 @@ def get_start(config, state, tap_stream_id, bookmark_key):
                 raise KeyError("datetime_key is set but start_datetime is not set")
             current_bookmark = config.get("start_datetime")
         elif config.get("index_key"):
-            if not config.get("start_index"):
+            if config.get("start_index") is None:
                 raise KeyError("index_key is set but start_index is not set")
             current_bookmark = config.get("start_index")
 
