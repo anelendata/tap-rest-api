@@ -162,7 +162,9 @@ def filter_object(obj, schema, dict_path=[], on_invalid_property="raise"):
 
     # Recurse if object or array types
     if obj_type == "object":
-        assert(type(obj) is dict and obj.keys())
+        if not (type(obj) is dict and obj.keys()):
+            raise KeyError("property type (object) Expected a dict object." +
+                           "Got: %s %s" % (type(obj), str(obj)))
         filtered = dict()
         for key in obj.keys():
             ret = filter_object(obj[key], schema, dict_path + ["properties", key], on_invalid_property)
