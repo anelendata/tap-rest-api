@@ -1,5 +1,5 @@
 {
-    "application": "REST API singer.io tap",
+    "application": "tap_rest_api",
     "args":
     {
         "url":
@@ -34,6 +34,20 @@
             "type": "string",
             "default": null,
             "help": "password used for authentication if applicable"
+        },
+
+        "offset_start":
+        {
+            "type": "integer",
+            "default": 0,
+            "help": "Specify the initial value of current_offset"
+        },
+
+        "page_start":
+        {
+            "type": "integer",
+            "default": 0,
+            "help": "Specify the initial value of current_page"
         },
 
         "schema_dir":

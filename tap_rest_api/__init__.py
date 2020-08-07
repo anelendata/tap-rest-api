@@ -64,8 +64,10 @@ def parse_args(spec_file, required_config_keys):
 
     # Overwrite with the custom spec file
     custom_spec = {}
-    with open(spec_file, "r") as f:
-        custom_spec.update(json.load(f))
+
+    if os.path.isfile(spec_file):
+        with open(spec_file, "r") as f:
+            custom_spec.update(json.load(f))
 
     SPEC["application"] = custom_spec.get("application", SPEC["application"])
     if custom_spec.get("args"):
@@ -73,7 +75,7 @@ def parse_args(spec_file, required_config_keys):
 
     parser = argparse.ArgumentParser(SPEC["application"])
 
-    parser.add_argument("spec_file", type=str, help="Specification file")
+    # parser.add_argument("spec_file", type=str, help="Specification file")
 
     # Capture additional args
     for arg in SPEC["args"].keys():
@@ -141,11 +143,9 @@ def main():
     """
     Entry point of tap_rest_api
     """
-    if len(sys.argv) < 2:
-        raise Exception("The first argument must specify the spec file.")
-    spec_file = sys.argv[1]
-    if not os.path.isfile(spec_file):
-        raise Exception("Spec file %s not found" % spec_file)
+    spec_file = ""
+    if len(sys.argv) > 1:
+        spec_file = sys.argv[1]
 
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
 
@@ -168,7 +168,11 @@ def main():
     max_page = CONFIG.get("max_page")
     filter_by_schema = CONFIG.get("filter_by_schema")
 
-    streams = CONFIG["streams"].split(",")
+    if CONFIG.get("streams"):
+        streams = CONFIG["streams"].split(",")
+    elif CONFIG.get("schema"):
+        streams = [CONFIG["schema"]]
+
     for stream in streams:
         stream = stream.strip()
         STREAMS[stream] = Stream(stream, CONFIG)

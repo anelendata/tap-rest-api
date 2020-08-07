@@ -12,6 +12,14 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (K
 LOGGER = singer.get_logger()
 
 
+# StitchData compatible timestamp meta data
+#  https://www.stitchdata.com/docs/data-structure/system-tables-and-columns
+# The timestamp of the record extracted from the source
+EXTRACT_TIMESTAMP = "_sdc_extracted_at"
+# The timestamp of the record submit to the destination (kept null at the extraction)
+BATCH_TIMESTAMP = "_sdc_batched_at"
+
+
 @attr.s
 class Stream(object):
     tap_stream_id = attr.ib()
@@ -51,16 +59,24 @@ def get_record_list(data, record_list_level):
 def get_init_endpoint_params(config, state, tap_stream_id):
     params = config
     start = get_start(config, state, tap_stream_id, "last_update")
+    end = get_end(config)
 
     if config.get("timestamp_key"):
         params.update({"start_timestamp": start})
+        params.update({"end_timestamp": end})
+        params.update({"start_datetime": datetime.datetime.fromtimestamp(start).isoformat()})
+        params.update({"end_datetime": datetime.datetime.fromtimestamp(end).isoformat()})
     elif config.get("datetime_key"):
         params.update({"start_datetime": start})
+        params.update({"end_datetime": end})
+        params.update({"start_timestamp": dateutil.parser.parse(start).timestamp()})
+        params.update({"end_timestamp": dateutil.parser.parse(end).timestamp()})
     elif config.get("index_key"):
         params.update({"start_index": start})
+        params.update({"end_index": end})
 
-    params.update({"current_page": 0})
-    params.update({"current_offset": 0})
+    params.update({"current_page": config.get("page_start", 0)})
+    params.update({"current_offset": config.get("offset_start", 0)})
     params.update({"last_update": start})
 
     return params
@@ -166,9 +182,15 @@ def get_end(config):
     if config.get("timestamp_key"):
         end_from_config = config.get("end_timestamp")
         if end_from_config is None:
-            end_from_config = dateutil.parser.parse(config["end_datetime"]).timestamp()
+            if config["end_timestamp"] is not None:
+                end_from_config = dateutil.parser.parse(config["end_datetime"]).timestamp()
+            else:
+                end_from_config = datetime.datetime.now().timestamp()
     elif config.get("datetime_key"):
-        end_from_config = config.get("end_datetime")
+        if config["end_datetime"] is not None:
+            end_from_config = config.get("end_datetime")
+        else:
+            end_from_config = datetime.datetime.now().isoformat()
     elif config.get("index_key"):
         end_from_config = config.get("end_index")
     return end_from_config

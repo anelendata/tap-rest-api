@@ -1,99 +1,124 @@
-# tap-rest-api
+# tap_rest_api
 
-A configurable REST API tap.
+A configurable REST API singer.io tap.
 
-This is a [Singer](https://singer.io) tap that produces JSON-formatted data
-following the [Singer
-spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
+## What is it?
+
+tap_rest_api is a [Singer](https://singer.io) tap that produces JSON-formatted
+data following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
 
 This tap:
 
-- Pulls raw data from Rest API
-- Outputs the schema for each resource
-- Incrementally pulls data based on the input state
+- Pulls JSON records from Rest API
+- Automatically infers the schema and generate JSON-schema file.
+- Incrementally pulls data based on the input state. (singer.io bookmark specification)
 
-Usage:
-
-1. Create the spec for config file:
-
-Example:
+The stdout from this program is intended by consumed by singer.io target program as:
 
 ```
+tap_rest_api | target-csv
+```
+
+## How to use it: USGS data example
+
+The following example is created using [USGS Earthquake Events data](https://earthquake.usgs.gov/fdsnws/event/1/).
+
+The record looks like:
+
+`curl https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2014-01-01&endtime=2014-01-02&minmagnitude=1`
+
+See [examples/usgs/sample_records.json](https://github.com/anelendata/tap_rest_api/blob/master/examples/usgs/sample_records.json)
+
+### Step 1: Default spec
+
+Anything defined here can be added to tap configuration file or to the
+command-line argument:
+
+- [default_spec.json](https://github.com/anelendata/tap_rest_api/blob/master/tap_rest_api/default_spec.json)
+
+### Step 2: [Optional] Create a custom spec for config file:
+
+If you would like to define more configuration variables, create a spec
+file. Anything you define overwrites the default spec.
+
+A spec file example (examples/usgs/custom_spec.json):
+```
 {
-    "application": "Some example API",
     "args": {
-        "prod_stage":
-        {
-            "type": "string",
-            "default": "stage",
-            "help": "This will fill the URL as https://{prod_stage}api.example.com"
-        },
-        "api_version":
+        "min_magnitude":
         {
             "type": "integer",
-            "default": 1,
-            "help": "This will fill the API version as https://api.example.com/v/{api_version}/"
+            "default": "0",
+            "help": "Filter based on the minimum magnitude."
         }
     }
 }
 ```
 
-Note: Currently, you need to create this file even if you don't want to modify the default config specs.
-In such cases, please provide an empty args object:
+### Step 3. Create Config file based on the spec:
 
+Example (examples/usgs/tap_config.json):
 ```
 {
-    "application": "Some example API",
-    "args": {}
+  "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
+  "timestamp_key": "time",
+  "minmagnitude": 1,
+  "schema": "earthquakes",
+  "record_list_level": "features",
+  "record_level": "properties",
+  "items_per_page": 100,
+  "offset_start": 1
 }
 ```
 
-The args that are reserved default can be found [default_spec.json](./tap_rest_api/default_spec.json)
+#### Parameters
 
+You can use `{<config>}` notion to insert the value specified at the config to URL.
 
-2. Create Config file based on the spec:
+Also notice the URL can contain parameters from config values and the following run-time variables:
 
-Example:
-```
-{
-  "url":"https://example.com/v1/some_resource",
-  "username":"xxxx",
-  "password":"yyyy",
-  "datetime_key": "last_modified_at",
-  "start_datetime": "2020-04-01 00:00:00Z",
-  "end_datetime": "2020-05-01 00:00:00Z",
-  "schema_dir": <path_to_schema_dir>
-}
-```
-
-Note: URL can contain parameters from config values and the following run-time variables:
-
-- resource: The current resource you are accessing based on Tap Stream ID provided by [streams default config variable](./tap_rest_api/default_spec.json).
+- current_offset: Offset by the number of records to skip
 - current_page: The current page if the endpoint supports paging
-- current_offset: Offset by the number of rows to skip
+- last_update: The last retrieved value of the column specified by index_key, timestamp_key, or datetime_key
 
-Example:
 
-```
-http://api.example.com/v1/{resource}?offset={current_offset}&limit={items_per_page}
-```
+#### Record list level and record level
 
-In the above example,
-- {items_per_page} is substituted by the config value.
-- {resource} and {current_offset} is substituted by the runtime value based on the current stream and paging.
+- record_list_level:
+  Some API wraps a set of records under a property. Others responds a newline separated JSONs.
+  For the former, we need to specify a key so the tap can find the record level. In USGS example,
+  we find "features" as the property that lists the records.
+- record_level:
+  Under the individual record, there may be another layer of properties that separates
+  the data and meta data and we may only interested in the former. If this is the case,
+  we can specify record_level.
+
+Limitations: Currently, both record_list_level and record_level are a single string,
+making impossible to go down more than one level.
+  
 
 3. Create schema and catalog files
 
 ```
-$ tap_rest_api spec.json --infer_schema --config config.json --schema_dir ./schema
+mkdir schema
+mkdir catalog
+$ tap_rest_api custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --infer_schema 
 ```
+
+The schema and catalog files are created under schema and catalog directories, respectively.
+
+Note:
+
+- If no customization needed, you can omit the spec file (custom_spec.json)
+- `start_dateime` and `end_datetime` are copied to `start_timestamp` and `end_timestamp`.
+- `end_timestamp` and `end_datetime` are automatically set as UTC now if not present in the config file or command-line argument.
 
 4.Run the tap
 
 ```
-$ tap_rest_api spec.json --config config.json --catalog catalog.json
+$ tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/earthquakes.json --start_datetime="2020-08-06"
 ```
 
 ---
 
-Copyright &copy; 2019~ Anelen Co., LLC
+Copyright &copy; 2020~ Anelen Co., LLC

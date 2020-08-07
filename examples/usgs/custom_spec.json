@@ -1,0 +1,11 @@
+{
+    "args": {
+        "min_magnitude":
+        {
+            "type": "integer",
+            "default": "0",
+            "help": "Filter based on the minimum magnitude."
+        }
+    }
+}
+
