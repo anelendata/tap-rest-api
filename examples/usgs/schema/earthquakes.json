@@ -1,0 +1,175 @@
+{
+  "type": "object",
+  "properties": {
+    "mag": {
+      "type": [
+        "null",
+        "number"
+      ]
+    },
+    "place": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "time": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "updated": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "tz": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "url": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "detail": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "felt": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "cdi": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "mmi": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "alert": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "status": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "tsunami": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "sig": {
+      "type": [
+        "null",
+        "integer"
+      ]
+    },
+    "net": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "code": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "ids": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "sources": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "types": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "nst": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "dmin": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "rms": {
+      "type": [
+        "null",
+        "number"
+      ]
+    },
+    "gap": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "magType": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "type": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "title": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "_sdc_extracted_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    },
+    "_sdc_batched_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
+    }
+  }
+}

@@ -27,7 +27,7 @@ The record looks like:
 
 `curl https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2014-01-01&endtime=2014-01-02&minmagnitude=1`
 
-See [examples/usgs/sample_records.json](https://github.com/anelendata/tap_rest_api/blob/master/examples/usgs/sample_records.json)
+See [examples/usgs/sample_records.json](https://raw.githubusercontent.com/anelendata/tap_rest_api/master/examples/usgs/sample_records.json)
 
 ### Step 1: Default spec
 
@@ -41,7 +41,7 @@ command-line argument:
 If you would like to define more configuration variables, create a spec
 file. Anything you define overwrites the default spec.
 
-A spec file example (examples/usgs/custom_spec.json):
+A spec file example (./examples/usgs/custom_spec.json):
 ```
 {
     "args": {
@@ -57,7 +57,7 @@ A spec file example (examples/usgs/custom_spec.json):
 
 ### Step 3. Create Config file based on the spec:
 
-Example (examples/usgs/tap_config.json):
+Example (./examples/usgs/tap_config.json):
 ```
 {
   "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
@@ -67,7 +67,8 @@ Example (examples/usgs/tap_config.json):
   "record_list_level": "features",
   "record_level": "properties",
   "items_per_page": 100,
-  "offset_start": 1
+  "offset_start": 1,
+  "auth_method": "no_auth"
 }
 ```
 
@@ -80,7 +81,6 @@ Also notice the URL can contain parameters from config values and the following 
 - current_offset: Offset by the number of records to skip
 - current_page: The current page if the endpoint supports paging
 - last_update: The last retrieved value of the column specified by index_key, timestamp_key, or datetime_key
-
 
 #### Record list level and record level
 
@@ -97,11 +97,9 @@ Limitations: Currently, both record_list_level and record_level are a single str
 making impossible to go down more than one level.
   
 
-3. Create schema and catalog files
+### Step 4. Create schema and catalog files
 
 ```
-mkdir schema
-mkdir catalog
 $ tap_rest_api custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --infer_schema 
 ```
 
@@ -113,10 +111,30 @@ Note:
 - `start_dateime` and `end_datetime` are copied to `start_timestamp` and `end_timestamp`.
 - `end_timestamp` and `end_datetime` are automatically set as UTC now if not present in the config file or command-line argument.
 
-4.Run the tap
+### Step 5. Run the tap
 
 ```
-$ tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/earthquakes.json --start_datetime="2020-08-06"
+$ tap_rest_api ./custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --catalog ./catalog/earthquakes.json
+```
+
+## Note on Authentication
+
+The example above does not require login. tap_rest_api currently supports
+basic auth. If this is needed add something like:
+
+```
+{
+  "auth_method": "basic",
+  "username": "my_username",
+  "password": "my_password",
+  ...
+}
+```
+
+Or add those at the commands line:
+
+```
+tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
 ```
 
 ---

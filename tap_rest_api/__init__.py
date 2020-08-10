@@ -75,7 +75,8 @@ def parse_args(spec_file, required_config_keys):
 
     parser = argparse.ArgumentParser(SPEC["application"])
 
-    # parser.add_argument("spec_file", type=str, help="Specification file")
+    if custom_spec:
+        parser.add_argument("spec_file", type=str, help="Custom spec file")
 
     # Capture additional args
     for arg in SPEC["args"].keys():

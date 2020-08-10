@@ -1,0 +1,11 @@
+{
+  "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
+  "timestamp_key": "time",
+  "minmagnitude": 1,
+  "schema": "earthquakes",
+  "record_list_level": "features",
+  "record_level": "properties",
+  "items_per_page": 100,
+  "offset_start": 1,
+  "auth_method": "no_auth"
+}

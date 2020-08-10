@@ -40,7 +40,7 @@ def get_record(raw_item, record_level):
 
     record = raw_item
     for x in record_level.split(","):
-        record = record[x]
+        record = record[x.strip()]
 
     return record
 
@@ -52,7 +52,7 @@ def get_record_list(data, record_list_level):
     if not record_list_level:
         return data
     for x in record_list_level.split(","):
-        data = data[x]
+        data = data[x.strip()]
     return data
 
 

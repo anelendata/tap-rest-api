@@ -19,8 +19,8 @@
         "auth_method":
         {
             "type": "string",
-            "default": "basic",
-            "help": "HTTP request authentication method: no_auth, basic, digest, or ntlm"
+            "default": "no_auth",
+            "help": "HTTP request authentication method: no_auth, basic or digest"
         },
 
         "username":
