@@ -218,9 +218,21 @@ def get_last_update(config, record, current):
             last_update = record_datetime.isoformat()
     elif config.get("index_key"):
         key = config["index_key"]
-        r_str = str(record.get(key))
-        if r_str and (not current or r_str > current):
-            last_update = r_str
+        current_index = str(record.get(key))
+        LOGGER.debug("Last update will be updated from %s to %s" %
+                    (last_update, current_index))
+        # When index is an integer, it's dangerous to compare 9 and 10 as
+        # string for example.
+        try:
+            current_index = int(current_index)
+        except ValueError:
+            # When the index suddenly changes to str, fall back to string
+            LOGGER.warning("Previously index was throught to be integer. Now" +
+                           " it seems to be string type. %s %s" %
+                           (last_update, current_index))
+            last_update = str(last_update)
+        if current_index and (not current or current_index > current):
+            last_update = current_index
         else:
             KeyError("index_key not found in the record")
     else:
