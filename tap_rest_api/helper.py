@@ -126,7 +126,8 @@ def generate_request(stream_id, url, auth_method="basic", username=None, passwor
     LOGGER.info("Using %s authentication method." % auth_method)
 
     with metrics.http_request_timer(stream_id) as timer:
-        headers = { 'User-Agent': USER_AGENT }
+        headers = {"User-Agent": USER_AGENT,
+                   "Content-type": "application/json"}
         resp = requests.get(url,
                 headers=headers,
                 auth=auth)

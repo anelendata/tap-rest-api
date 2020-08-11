@@ -67,19 +67,19 @@
         {
             "type": "string",
             "default": null,
-            "help": "Unix timestamp key(column) name. If this is not null, timestamp_key is ignored"
+            "help": "POSIX timestamp key(column) name. If this is not null, timestamp_key is ignored"
         },
         "start_timestamp":
         {
             "type": "integer",
             "default": null,
-            "help": "Start Unix timestamp"
+            "help": "Start POSIX timestamp"
         },
         "end_timestamp":
         {
             "type": "integer",
             "default": null,
-            "help": "End Unix timestamp. When this is set, tap only replicates the record with end_timestamp younger than end_timestamp. Once equal or greater than end_datetime is read, the process exits."
+            "help": "End POSIX timestamp. When this is set, tap only replicates the record with end_timestamp younger than end_timestamp. Once equal or greater than end_datetime is read, the process exits."
         },
 
         "datetime_key":
