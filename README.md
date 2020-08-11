@@ -57,7 +57,7 @@ A spec file example (./examples/usgs/custom_spec.json):
 
 ### Step 3. Create Config file based on the spec:
 
-Example (./examples/usgs/tap_config.json):
+[Example](./examples/usgs/tap_config.json):
 ```
 {
   "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
@@ -90,12 +90,11 @@ Also notice the URL can contain parameters from config values and the following 
   we find "features" as the property that lists the records.
 - record_level:
   Under the individual record, there may be another layer of properties that separates
-  the data and meta data and we may only interested in the former. If this is the case,
+  the data and meta data and we may only be interested in the former. If this is the case,
   we can specify record_level.
 
 Limitations: Currently, both record_list_level and record_level are a single string,
 making impossible to go down more than one level.
-  
 
 ### Step 4. Create schema and catalog files
 
@@ -117,7 +116,7 @@ Note:
 $ tap_rest_api ./custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --catalog ./catalog/earthquakes.json
 ```
 
-## Note on Authentication
+## Authentication
 
 The example above does not require login. tap_rest_api currently supports
 basic auth. If this is needed add something like:
@@ -136,6 +135,12 @@ Or add those at the commands line:
 ```
 tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
 ```
+
+## State
+
+This tap emits [state](https://github.com/singer-io/getting-started/blob/master/docs/CONFIG_AND_STATE.md#state-file).
+The command also takes a state file input with `--state <file-name>` option.
+The tap itself does not output a state file. It anticipate the target program or a downstream process to fianlize the state safetly and produce a state file.
 
 ---
 
