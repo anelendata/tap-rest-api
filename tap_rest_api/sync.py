@@ -1,4 +1,5 @@
-import datetime, json, sys, time
+import datetime, sys, time
+import simplejson as json
 
 import singer
 import singer.metrics as metrics
@@ -91,7 +92,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             LOGGER.info("GET %s", endpoint)
 
             rows = generate_request(tap_stream_id, endpoint, auth_method,
-                                    config["username"], config["password"])
+                                    config.get("username"),
+                                    config.get("password"))
             rows = get_record_list(rows, config.get("record_list_level"))
 
             LOGGER.info("Current page %d" % page_number)
@@ -186,7 +188,6 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
 
     for stream in selected_streams:
         LOGGER.info("%s Start sync" % stream.tap_stream_id)
-
 
         singer.set_currently_syncing(state, stream.tap_stream_id)
         if raw is False:

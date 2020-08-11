@@ -1,5 +1,6 @@
 venv
 .env
+install_test
 
 # Distribution / packaging
 .Python

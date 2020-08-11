@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import argparse, json, os, sys
+import argparse, os, sys
+import simplejson as json
 import singer
 from singer import utils
 from singer.catalog import Catalog
@@ -7,7 +8,6 @@ from singer.catalog import Catalog
 from .helper import Stream, get_abs_path
 from .sync import sync
 from .schema import discover, infer_schema
-
 
 LOGGER = singer.get_logger()
 

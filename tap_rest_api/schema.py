@@ -1,5 +1,5 @@
-import dateutil, json, os, sys
-
+import dateutil, os, sys
+import simplejson as json
 import singer
 from singer import utils
 
@@ -72,7 +72,7 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     LOGGER.info("GET %s", endpoint)
     auth_method = config.get("auth_method", "basic")
     data = generate_request(tap_stream_id, endpoint, auth_method,
-                            config["username"], config["password"])
+                            config.get("username"), config.get("password"))
 
     # In case the record is not at the root level
     data = get_record_list(data, config.get("record_list_level"))

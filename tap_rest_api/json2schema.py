@@ -1,5 +1,6 @@
-import dateutil, json, sys, re
+import dateutil, sys, re
 from dateutil.tz import tzoffset
+import simplejson as json
 
 # JSON schema follows:
 # https://json-schema.org/

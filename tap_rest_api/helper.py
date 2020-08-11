@@ -82,10 +82,10 @@ def get_init_endpoint_params(config, state, tap_stream_id):
     return params
 
 
-def get_endpoint(url_format, tap_stream_id, kwargs):
+def get_endpoint(url_format, tap_stream_id, data):
     """ Get the full url for the endpoint including query
 
-    In addition to kwargs passed from config values, it will create "resource"
+    In addition to data passed from config values, it will create "resource"
     that is derived from tap_stream_id.
 
     The special characters in query are quoted with "%XX"
@@ -96,8 +96,8 @@ def get_endpoint(url_format, tap_stream_id, kwargs):
             items_per_page={items_per_page}&page={current_page}
     """
     params = dict()
-    for key in kwargs:
-        params[key] = urlquote(str(kwargs[key]).encode("utf-8"))
+    for key in data:
+        params[key] = urlquote(str(data[key]).encode("utf-8"))
     params["resource"] = urlquote(str(tap_stream_id).encode("utf-8"))
     return url_format.format(**params)
 
@@ -183,12 +183,12 @@ def get_end(config):
     if config.get("timestamp_key"):
         end_from_config = config.get("end_timestamp")
         if end_from_config is None:
-            if config["end_timestamp"] is not None:
+            if config.get("end_timestamp") is not None:
                 end_from_config = dateutil.parser.parse(config["end_datetime"]).timestamp()
             else:
                 end_from_config = datetime.datetime.now().timestamp()
     elif config.get("datetime_key"):
-        if config["end_datetime"] is not None:
+        if config.get("end_datetime") is not None:
             end_from_config = config.get("end_datetime")
         else:
             end_from_config = datetime.datetime.now().isoformat()
