@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/anelendata/tap_rest_api.svg?branch=master)](https://travis-ci.com/anelendata/tap_rest_api)
+
 # tap_rest_api
 
 A configurable REST API singer.io tap.
