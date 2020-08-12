@@ -6,7 +6,7 @@ A configurable REST API singer.io tap.
 
 ## What is it?
 
-tap_rest_api is a [Singer](https://singer.io) tap that produces JSON-formatted
+tap-rest-api is a [Singer](https://singer.io) tap that produces JSON-formatted
 data following the [Singer spec](https://github.com/singer-io/getting-started).
 
 This tap:
@@ -19,7 +19,7 @@ This tap:
 The stdout from this program is intended by consumed by singer.io target program as:
 
 ```
-tap_rest_api | target-csv
+tap-rest-api | target-csv
 ```
 
 ## How to use it
@@ -167,7 +167,7 @@ making impossible to go down more than one level.
 ### Step 4. Create schema and catalog files
 
 ```
-$ tap_rest_api custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --infer_schema 
+$ tap-rest-api custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --infer_schema
 ```
 
 The schema and catalog files are created under schema and catalog directories, respectively.
@@ -181,12 +181,12 @@ Note:
 ### Step 5. Run the tap
 
 ```
-$ tap_rest_api ./custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --catalog ./catalog/earthquakes.json
+$ tap-rest-api ./custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --catalog ./catalog/earthquakes.json
 ```
 
 ## Authentication
 
-The example above does not require login. tap_rest_api currently supports
+The example above does not require login. tap-rest-api currently supports
 basic auth. If this is needed add something like:
 
 ```
@@ -201,7 +201,7 @@ basic auth. If this is needed add something like:
 Or add those at the commands line:
 
 ```
-tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
+tap-rest-api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
 ```
 
 ## State

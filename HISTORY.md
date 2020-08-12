@@ -1,5 +1,9 @@
 ## History
 
+### 0.1.0b2 (2020-08-12)
+
+Project description update only.
+
 ### 0.1.0b1 (2020-08-12)
 
 Change repository and command name to tap-rest-api (from underscore)
