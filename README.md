@@ -96,7 +96,8 @@ A spec file example (./examples/usgs/custom_spec.json):
 
 ### Step 3. Create Config file based on the spec:
 
-[Example](https://github.com/anelendata/tap_rest_api/tree/master/examples/usgs/tap_config.json):
+[Example](https://github.com/anelendata/tap_rest_api/tree/master/examples/usgs/config/tap_config.json):
+
 ```
 {
   "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
