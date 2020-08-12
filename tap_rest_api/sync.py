@@ -7,7 +7,7 @@ import singer.metrics as metrics
 from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
                      get_init_endpoint_params, get_last_update, get_record,
                      get_record_list, get_selected_streams, get_start,
-                     get_streams_to_sync,
+                     get_streams_to_sync, human_readable,
                      EXTRACT_TIMESTAMP)
 from .schema import filter_record, load_schema
 
@@ -31,24 +31,22 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config)
 
+    if start is None:
+        LOGGER.warning("None of timestamp_key, datetime_key, and index_key" +
+                       " are set in conifg. Bookmarking is not available.")
+
+    start_str = human_readable(bookmark_type, start)
+    end_str = human_readable(bookmark_type, end)
     # Log the conditions
-    pretty_start = start
-    pretty_end = end
-    if bookmark_type == "timestamp":
-        pretty_start = str(start) + " (" + str(
-            datetime.datetime.fromtimestamp(start)) + ")"
-        if end is not None:
-            pretty_end = str(end) + " (" + str(
-                datetime.datetime.fromtimestamp(end)) + ")"
     LOGGER.info("Stream %s has %s set starting %s and ending %s." %
-                (tap_stream_id, bookmark_type, pretty_start, pretty_end))
+                (tap_stream_id, bookmark_type, start_str, end_str))
     # I trust you set URL format contains those params. The behavior depends
     # on the data source API's spec.
     # I will not filter out the records outside the boundary. Every record
     # received is will be written out.
 
     LOGGER.info("assume_sorted is set to %s" % assume_sorted)
-    # I trust the data to be presorted by the index/timestamp/datetime keys.
+    # I trust the data to be sorted by the index/timestamp/datetime keys.
     # So it is safe to finish the replication once the last
     # update index/timestamp/datetime passes the end.
     # When in doubt, set this to False. Always perform post-replication dedup.
@@ -66,7 +64,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     page_number = params.get("current_page", 0)
 
     # When we rely on index/datetime/timestamp to parse the next GET URL,
-    # we get the record we have already seen in the current process.
+    # we will get the record we have already seen in the current process.
     # When we get last_record_extracted from state file, we can also
     # compare with the previous process to further avoiding duplicated
     # records in the target data store.

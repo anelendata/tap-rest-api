@@ -12,7 +12,8 @@ data following the [Singer spec](https://github.com/singer-io/getting-started).
 This tap:
 
 - Pulls JSON records from Rest API
-- Automatically infers the schema and generate JSON-schema file.
+- Automatically infers the schema and generate JSON-schema and Singer catalog
+  file.
 - Incrementally pulls data based on the input state. (singer.io bookmark specification)
 
 The stdout from this program is intended by consumed by singer.io target program as:
@@ -21,7 +22,7 @@ The stdout from this program is intended by consumed by singer.io target program
 tap_rest_api | target-csv
 ```
 
-## How to use it: USGS data example
+## How to use it
 
 The following example is created using [USGS Earthquake Events data](https://earthquake.usgs.gov/fdsnws/event/1/).
 
@@ -64,25 +65,53 @@ A spec file example (./examples/usgs/custom_spec.json):
 {
   "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
   "timestamp_key": "time",
-  "minmagnitude": 1,
-  "schema": "earthquakes",
   "record_list_level": "features",
   "record_level": "properties",
+  "schema": "earthquakes",
   "items_per_page": 100,
   "offset_start": 1,
   "auth_method": "no_auth"
+  "min_magnitude": 1,
 }
 ```
 
-#### Parameters
+Below are some key concepts in the configuration file.
 
-You can use `{<config>}` notion to insert the value specified at the config to URL.
+#### Parametric URL
 
-Also notice the URL can contain parameters from config values and the following run-time variables:
+You can use `{<config_varable_name>}` notion to insert the value specified at the config to URL.
+
+In addition to the config variables listed in
+[default_spec.json](https://github.com/anelendata/tap_rest_api/blob/master/tap_rest_api/default_spec.json)
+and the custom spec file, the URL also can contain parameters from the following run-time variables:
 
 - current_offset: Offset by the number of records to skip
 - current_page: The current page if the endpoint supports paging
 - last_update: The last retrieved value of the column specified by index_key, timestamp_key, or datetime_key
+  (See next section)
+
+#### timestamp_key, datetime_key, index_key
+
+If you want to use timestamp, datetime, index in the parameterized URL or
+want to use a field in those types as a bookmark, one of either timestamp_key,
+datetime_key, or index_key must be set to indicate which field in the record
+corresponds to the data type.
+
+- timestamp_key: POSIX timestamp
+- datetime_key: ISO 8601 formatted datetime (it can be truncated to date and etc)
+  It works when the character between the date and time components is " " instead of "T".
+- index_key: A sequential index (integer or string)
+
+When you specify timestamp_key, datetime_key, or index_key in the config,
+you also need to set start_timestamp, start_datetime, or start_index in
+config or as a command-line argument.
+
+Optionally, you can set end_timestamp, end_datetime, or end_index to indicate
+so the process stops once such threashold is encounterd, assuming the data
+is sorted by the field.
+
+For human convenience, start/end_datetime (more human readable) is also looked
+up when timestamp_key is set but start/end_timestamp is not set.
 
 #### Record list level and record level
 
@@ -143,6 +172,16 @@ tap_rest_api config/custom_spec.json --config config/tap_config.json --schema_di
 This tap emits [state](https://github.com/singer-io/getting-started/blob/master/docs/CONFIG_AND_STATE.md#state-file).
 The command also takes a state file input with `--state <file-name>` option.
 The tap itself does not output a state file. It anticipate the target program or a downstream process to fianlize the state safetly and produce a state file.
+
+## Raw output
+
+If you want to use this tap outside Singer framework, set `--raw` in the
+commandline argument. Then the process write out the records as
+newline-separated JSON.
+
+A use case for this mode is when you expect the schema to change or inconsistent
+and you rather want to extract and clean up post-loading.
+([Example](https://articles.anelen.co/elt-google-cloud-storage-bigquery/)
 
 ---
 

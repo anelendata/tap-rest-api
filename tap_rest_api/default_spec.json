@@ -2,18 +2,30 @@
     "application": "tap_rest_api",
     "args":
     {
-        "url":
-        {
-            "type": "string",
-            "default": null,
-            "help": "REST API endpoint with {params}. Required in config."
-        },
-
         "streams":
         {
             "type": "string",
             "default": null,
             "help": "comma-separated strings of tap stream IDs"
+        },
+        "schema_dir":
+        {
+            "type": "string",
+            "default": "./schema",
+            "help": "Path to the schema directory"
+        },
+        "catalog_dir":
+        {
+            "type": "string",
+            "default": "./catalog",
+            "help": "Path to the catalog directory"
+        },
+
+        "url":
+        {
+            "type": "string",
+            "default": null,
+            "help": "REST API endpoint with {params}. Required in config."
         },
 
         "auth_method":
@@ -48,19 +60,6 @@
             "type": "integer",
             "default": 0,
             "help": "Specify the initial value of current_page"
-        },
-
-        "schema_dir":
-        {
-            "type": "string",
-            "default": "./schema",
-            "help": "Path to the schema directory"
-        },
-        "catalog_dir":
-        {
-            "type": "string",
-            "default": "./catalog",
-            "help": "Path to the catalog directory"
         },
 
         "timestamp_key":
