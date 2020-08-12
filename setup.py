@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 from setuptools import setup
 
-VERSION = "0.1.0b0"
+VERSION = "0.1.0b1"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="tap_rest_api",
+    name="tap-rest-api",
     version=VERSION,
     description="Singer.io tap for extracting data from any REST API ",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Daigo Tanaka, Anelen Co., LLC",
-    url="https://github.com/anelendata/tap_rest_api",
+    url="https://github.com/anelendata/tap-rest-api",
 
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -27,7 +27,6 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
 
-    py_modules=["tap_rest_api"],
     install_requires=[
         "attrs>=18.1.0",
         "backoff==1.8.0",
@@ -39,10 +38,10 @@ setup(
     ],
     entry_points="""
     [console_scripts]
-    tap_rest_api=tap_rest_api:main
+    tap-rest-api=tap_rest_api:main
     """,
     packages=["tap_rest_api"],
-    package_data = {
+    package_data={
         # Use MANIFEST.ini
     },
     include_package_data=True

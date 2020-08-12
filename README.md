@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.com/anelendata/tap_rest_api.svg?branch=master)](https://travis-ci.com/anelendata/tap_rest_api)
 
-# tap_rest_api
+# tap-rest-api
 
 A configurable REST API singer.io tap.
 
@@ -63,7 +63,7 @@ The following example is created using [USGS Earthquake Events data](https://ear
   ]
 }
 ```
-[examples/usgs/sample_records.json](https://raw.githubusercontent.com/anelendata/tap_rest_api/master/examples/usgs/sample_records.json)
+[examples/usgs/sample_records.json](https://raw.githubusercontent.com/anelendata/tap-rest-api/master/examples/usgs/sample_records.json)
 
 In the following steps, we will atempt to extract `properties` section of
 the record type `Feature` as Singer record.
@@ -73,7 +73,7 @@ the record type `Feature` as Singer record.
 Anything defined here can be added to tap configuration file or to the
 command-line argument:
 
-- [default_spec.json](https://github.com/anelendata/tap_rest_api/blob/master/tap_rest_api/default_spec.json)
+- [default_spec.json](https://github.com/anelendata/tap-rest-api/blob/master/tap_rest_api/default_spec.json)
 
 ### Step 2: [Optional] Create a custom spec for config file:
 
@@ -96,7 +96,7 @@ A spec file example (./examples/usgs/custom_spec.json):
 
 ### Step 3. Create Config file based on the spec:
 
-[Example](https://github.com/anelendata/tap_rest_api/tree/master/examples/usgs/config/tap_config.json):
+[Example](https://github.com/anelendata/tap-rest-api/tree/master/examples/usgs/config/tap_config.json):
 
 ```
 {
@@ -119,7 +119,7 @@ Below are some key concepts in the configuration file.
 You can use `{<config_varable_name>}` notion to insert the value specified at the config to URL.
 
 In addition to the config variables listed in
-[default_spec.json](https://github.com/anelendata/tap_rest_api/blob/master/tap_rest_api/default_spec.json)
+[default_spec.json](https://github.com/anelendata/tap-rest-api/blob/master/tap_rest_api/default_spec.json)
 and the custom spec file, the URL also can contain parameters from the following run-time variables:
 
 - current_offset: Offset by the number of records to skip
