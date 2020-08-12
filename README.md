@@ -26,11 +26,47 @@ tap_rest_api | target-csv
 
 The following example is created using [USGS Earthquake Events data](https://earthquake.usgs.gov/fdsnws/event/1/).
 
-The record looks like:
-
 `curl https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2014-01-01&endtime=2014-01-02&minmagnitude=1`
 
-See [examples/usgs/sample_records.json](https://raw.githubusercontent.com/anelendata/tap_rest_api/master/examples/usgs/sample_records.json)
+```
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -116.7776667,
+          33.6633333,
+          11.008
+        ]
+      },
+      "type": "Feature",
+      "properties": {
+        "rms": 0.09,
+        "code": "11408890",
+        "cdi": null,
+        "sources": ",ci,",
+        "nst": 39,
+        "tz": -480,
+        "title": "M 1.3 - 10km SSW of Idyllwild, CA",
+        ...
+        "mag": 1.29,
+        ...
+        "place": "10km SSW of Idyllwild, CA",
+        "time": 1388620296020,
+        "mmi": null
+      },
+      "id": "ci11408890"
+    },
+    ...
+  ]
+}
+```
+[examples/usgs/sample_records.json](https://raw.githubusercontent.com/anelendata/tap_rest_api/master/examples/usgs/sample_records.json)
+
+In the following steps, we will atempt to extract `properties` section of
+the record type `Feature` as Singer record.
 
 ### Step 1: Default spec
 
@@ -173,7 +209,7 @@ This tap emits [state](https://github.com/singer-io/getting-started/blob/master/
 The command also takes a state file input with `--state <file-name>` option.
 The tap itself does not output a state file. It anticipate the target program or a downstream process to fianlize the state safetly and produce a state file.
 
-## Raw output
+## Raw output mode
 
 If you want to use this tap outside Singer framework, set `--raw` in the
 commandline argument. Then the process write out the records as
@@ -181,7 +217,7 @@ newline-separated JSON.
 
 A use case for this mode is when you expect the schema to change or inconsistent
 and you rather want to extract and clean up post-loading.
-([Example](https://articles.anelen.co/elt-google-cloud-storage-bigquery/)
+([Example](https://articles.anelen.co/elt-google-cloud-storage-bigquery/))
 
 ---
 
