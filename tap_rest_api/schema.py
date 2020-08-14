@@ -4,7 +4,7 @@ import singer
 from singer import utils
 
 from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
-                     get_record, get_record_list,
+                     get_record, get_record_list, get_http_headers,
                      EXTRACT_TIMESTAMP, BATCH_TIMESTAMP)
 from . import json2schema
 
@@ -71,8 +71,12 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     endpoint = get_endpoint(config["url"], tap_stream_id, params)
     LOGGER.info("GET %s", endpoint)
     auth_method = config.get("auth_method", "basic")
+
+    headers = get_http_headers(config)
     data = generate_request(tap_stream_id, endpoint, auth_method,
-                            config.get("username"), config.get("password"))
+                            headers,
+                            config.get("username"),
+                            config.get("password"))
 
     # In case the record is not at the root level
     data = get_record_list(data, config.get("record_list_level"))

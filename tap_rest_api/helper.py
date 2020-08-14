@@ -1,4 +1,5 @@
 import attr, backoff, dateutil, datetime, os, requests
+import simplejson as json
 from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from dateutil.tz import tzoffset
@@ -246,6 +247,18 @@ def get_init_endpoint_params(config, state, tap_stream_id):
     return params
 
 
+def get_http_headers(config=None):
+    if not config or not config.get("http_headers"):
+        return {"User-Agent": USER_AGENT,
+                "Content-type": "application/json"}
+
+    headers = config["http_headers"]
+    if type(headers) == str:
+        headers = json.loads(headers)
+    LOGGER.debug(headers)
+    return headers
+
+
 def get_endpoint(url_format, tap_stream_id, data):
     """ Get the full url for the endpoint including query
 
@@ -274,7 +287,7 @@ def _giveup(exc):
 
 @utils.backoff((backoff.expo, requests.exceptions.RequestException), _giveup)
 @utils.ratelimit(20, 1)
-def generate_request(stream_id, url, auth_method="no_auth",
+def generate_request(stream_id, url, auth_method="no_auth", headers=None,
                      username=None, password=None):
     """
     url: URL with pre-encoded query. See get_endpoint()
@@ -290,9 +303,9 @@ def generate_request(stream_id, url, auth_method="no_auth",
 
     LOGGER.info("Using %s authentication method." % auth_method)
 
+    headers = headers or get_http_headers()
+
     with metrics.http_request_timer(stream_id) as timer:
-        headers = {"User-Agent": USER_AGENT,
-                   "Content-type": "application/json"}
         resp = requests.get(url,
                             headers=headers,
                             auth=auth)
