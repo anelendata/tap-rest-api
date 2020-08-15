@@ -204,6 +204,35 @@ Or add those at the commands line:
 tap-rest-api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
 ```
 
+## Custom http-headers
+
+In addition to the authentication method, you can specify the http header
+in config file:
+
+Example:
+
+```
+...
+"http_headers":
+    {
+      "User-Agent": "Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36",
+      "Content-type": "application/json",
+      "Authorization": "Bearer <some-key>"
+    },
+...
+```
+
+Here is the default value:
+```
+{
+  "User-Agent": "Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36",
+  "Content-type": "application/json"
+}
+```
+
+When you define http_headers config value, the default value is nullified.
+So you should redefine "User-Agent" and "Content-type" when you need them.
+
 ## State
 
 This tap emits [state](https://github.com/singer-io/getting-started/blob/master/docs/CONFIG_AND_STATE.md#state-file).
