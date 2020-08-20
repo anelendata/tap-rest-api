@@ -1,4 +1,4 @@
-import dateutil, sys, re
+import datetime, dateutil, sys, re
 from dateutil.tz import tzoffset
 import simplejson as json
 
@@ -34,15 +34,22 @@ def _do_infer_schema(obj, record_level=None):
         except:
             schema["type"] = ["null", "string"]
             # TODO: This is a very loose regex for date-time.
-            if type(obj) is str and re.match("(19|20)\d\d-(0[1-9]|1[012])-([1-9]|0[1-9]|[12][0-9]|3[01])", obj) is not None:
+            if (type(obj) is datetime.datetime or
+                    type(obj) is datetime.date or
+                    (type(obj) is str and
+                     re.match("(19|20)\d\d-(0[1-9]|1[012])-([1-9]|0[1-9]|[12][0-9]|3[01])",
+                              obj) is not None)):
                 schema["format"] = "date-time"
         else:
             if type(obj) == bool:
                 schema["type"] = ["null", "boolean"]
             elif type(obj) == float or (type(obj) == str and "." in obj):
                 schema["type"] = ["null", "number"]
-            else:
+            # Let's assume it's a code such as zipcode if there is a leading 0
+            elif type(obj) == int or (type(obj) == str and obj[0] != "0"):
                 schema["type"] = ["null", "integer"]
+            else:
+                schema["type"] = ["null", "string"]
     return schema
 
 
