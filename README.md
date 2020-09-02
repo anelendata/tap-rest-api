@@ -77,10 +77,9 @@ command-line argument:
 
 ### Step 2: [Optional] Create a custom spec for config file:
 
-If you would like to define more configuration variables, create a spec
-file. Anything you define overwrites the default spec.
-
-A spec file example (./examples/usgs/custom_spec.json):
+If you would like to define more configuration variables, create a spec file.
+Here is an
+[example] (https://github.com/anelendata/tap-rest-api/blob/master/examples/usgs/custom_spec.json):
 ```
 {
     "args": {
@@ -94,7 +93,16 @@ A spec file example (./examples/usgs/custom_spec.json):
 }
 ```
 
-### Step 3. Create Config file based on the spec:
+Anything you define here overwrites
+[default_spec.json](https://github.com/anelendata/tap-rest-api/blob/master/tap_rest_api/default_spec.json).
+
+### Step 3. Create Config file:
+
+Now create a cofnig file. Note the difference between spec file and config file.
+The role of spec file is to create or alter the config specs, and the role of
+the config file is to provide the values to the config variables. When a value
+is not specified in the config file, the default value defined in the spec
+file is used.
 
 [Example](https://github.com/anelendata/tap-rest-api/tree/master/examples/usgs/config/tap_config.json):
 
