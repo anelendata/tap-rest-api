@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP=tap_rest_api
+APP=tap-rest-api
 
 PYTHON=/opt/python/3.6/bin/python
 if [ ! -e $PYTHON ]; then
@@ -37,7 +37,7 @@ fi
 
 # Note: Don't insert spaces in the next line
 $APP&>install_test/msg
-CMD_OUT=`cat install_test/msg | grep "usage: $APP"`
+CMD_OUT=`cat install_test/msg | grep "usage:"`
 if [ -z "$CMD_OUT"  ]; then
     cat install_test/msg
     echo "$APP is not properly installed"
