@@ -1,4 +1,4 @@
-import dateutil, sys, re
+import datetime, dateutil, sys, re
 from dateutil.tz import tzoffset
 import simplejson as json
 
@@ -34,15 +34,22 @@ def _do_infer_schema(obj, record_level=None):
         except:
             schema["type"] = ["null", "string"]
             # TODO: This is a very loose regex for date-time.
-            if type(obj) is str and re.match("(19|20)\d\d-(0[1-9]|1[012])-([1-9]|0[1-9]|[12][0-9]|3[01])", obj) is not None:
+            if (type(obj) is datetime.datetime or
+                    type(obj) is datetime.date or
+                    (type(obj) is str and
+                     re.match("(19|20)\d\d-(0[1-9]|1[012])-([1-9]|0[1-9]|[12][0-9]|3[01])",
+                              obj) is not None)):
                 schema["format"] = "date-time"
         else:
             if type(obj) == bool:
                 schema["type"] = ["null", "boolean"]
             elif type(obj) == float or (type(obj) == str and "." in obj):
                 schema["type"] = ["null", "number"]
-            else:
+            # Let's assume it's a code such as zipcode if there is a leading 0
+            elif type(obj) == int or (type(obj) == str and obj[0] != "0"):
                 schema["type"] = ["null", "integer"]
+            else:
+                schema["type"] = ["null", "string"]
     return schema
 
 
@@ -185,24 +192,35 @@ def filter_object(obj, schema, dict_path=[], on_invalid_property="raise"):
                 try:
                     filtered = _parse_datetime_tz(obj, default_tz_offset=0).isoformat()
                 except Exception as e:
-                    filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+                    filtered = _on_invalid_property(on_invalid_property,
+                                                    dict_path, obj_type, obj,
+                                                    err_msg=str(e))
         elif obj_type == "number":
             try:
                 filtered = float(obj)
             except ValueError as e:
-                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+                filtered = _on_invalid_property(
+                    on_invalid_property, dict_path, obj_type, obj,
+                    err_msg=str(e))
         elif obj_type == "integer":
             try:
                 filtered = int(obj)
             except ValueError as e:
-                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+                filtered = _on_invalid_property(
+                    on_invalid_property, dict_path, obj_type, obj,
+                    err_msg=str(e))
         elif obj_type == "boolean":
             if str(obj).lower() == "true":
                 filtered = True
             elif str(obj).lower() == "false":
                 filtered = False
             else:
-                filtered = _on_invalid_property(on_invalid_property, dict_path, obj_type, obj, err_msg=str(e))
+                filtered = _on_invalid_property(
+                    on_invalid_property, dict_path, obj_type, obj,
+                    err_msg=(str(obj) +
+                             " is not a valid value for boolean type"))
+        else:
+            raise Exception("Invalid type in schema: %s" % obj_type)
     return filtered
 
 

@@ -1,5 +1,11 @@
 ## History
 
+### 0.1.1 (2020-11-08)
+
+- Custom header (See README.md)
+- Raise when an invalid type is set in schema
+- Treat numbers with leading zeros as string
+
 ### 0.1.0b2 (2020-08-12)
 
 Project description update only.

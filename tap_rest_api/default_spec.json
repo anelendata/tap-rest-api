@@ -35,6 +35,11 @@
             "help": "HTTP request authentication method: no_auth, basic or digest"
         },
 
+        "http_headers": {
+            "type": "string",
+            "default": null,
+            "help": "JSON-format string of HTTP request headers key-value pairs" },
+
         "username":
         {
             "type": "string",

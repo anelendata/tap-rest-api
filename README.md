@@ -77,10 +77,9 @@ command-line argument:
 
 ### Step 2: [Optional] Create a custom spec for config file:
 
-If you would like to define more configuration variables, create a spec
-file. Anything you define overwrites the default spec.
-
-A spec file example (./examples/usgs/custom_spec.json):
+If you would like to define more configuration variables, create a spec file.
+Here is an
+[example] (https://github.com/anelendata/tap-rest-api/blob/master/examples/usgs/custom_spec.json):
 ```
 {
     "args": {
@@ -94,7 +93,16 @@ A spec file example (./examples/usgs/custom_spec.json):
 }
 ```
 
-### Step 3. Create Config file based on the spec:
+Anything you define here overwrites
+[default_spec.json](https://github.com/anelendata/tap-rest-api/blob/master/tap_rest_api/default_spec.json).
+
+### Step 3. Create Config file:
+
+Now create a cofnig file. Note the difference between spec file and config file.
+The role of spec file is to create or alter the config specs, and the role of
+the config file is to provide the values to the config variables. When a value
+is not specified in the config file, the default value defined in the spec
+file is used.
 
 [Example](https://github.com/anelendata/tap-rest-api/tree/master/examples/usgs/config/tap_config.json):
 
@@ -203,6 +211,35 @@ Or add those at the commands line:
 ```
 tap-rest-api config/custom_spec.json --config config/tap_config.json --schema_dir ./config/schema --catalog ./config/catalog/some_catalog.json --start_datetime="2020-08-06" --username my_username --password my_password --auth_method basic
 ```
+
+## Custom http-headers
+
+In addition to the authentication method, you can specify the http header
+in config file:
+
+Example:
+
+```
+...
+"http_headers":
+    {
+      "User-Agent": "Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36",
+      "Content-type": "application/json",
+      "Authorization": "Bearer <some-key>"
+    },
+...
+```
+
+Here is the default value:
+```
+{
+  "User-Agent": "Mozilla/5.0 (Macintosh; scitylana.singer.io) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36",
+  "Content-type": "application/json"
+}
+```
+
+When you define http_headers config value, the default value is nullified.
+So you should redefine "User-Agent" and "Content-type" when you need them.
 
 ## State
 

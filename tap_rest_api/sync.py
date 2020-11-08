@@ -8,6 +8,7 @@ from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
                      get_init_endpoint_params, get_last_update, get_record,
                      get_record_list, get_selected_streams, get_start,
                      get_streams_to_sync, human_readable,
+                     get_http_headers,
                      EXTRACT_TIMESTAMP)
 from .schema import filter_record, load_schema
 
@@ -30,6 +31,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     bookmark_type = get_bookmark_type(config)
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config)
+
+    headers = get_http_headers(config)
 
     if start is None:
         LOGGER.warning("None of timestamp_key, datetime_key, and index_key" +
@@ -90,6 +93,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             LOGGER.info("GET %s", endpoint)
 
             rows = generate_request(tap_stream_id, endpoint, auth_method,
+                                    headers,
                                     config.get("username"),
                                     config.get("password"))
             rows = get_record_list(rows, config.get("record_list_level"))
