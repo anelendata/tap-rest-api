@@ -202,10 +202,12 @@ def get_last_update(config, record, current):
         try:
             current_index = int(current_index)
         except ValueError:
-            # When the index suddenly changes to str, fall back to string
-            LOGGER.warning("Previously index was throught to be integer. Now" +
-                           " it seems to be string type. %s %s" %
-                           (last_update, current_index))
+            if type(last_update) == int:
+                # When the index suddenly changes to str, fall back to string
+                LOGGER.warning(
+                    "Previously index was throught to be integer. Now" +
+                    " it seems to be string type. %s %s" %
+                    (last_update, current_index))
             last_update = str(last_update)
         if current_index and (not current or current_index > current):
             last_update = current_index
