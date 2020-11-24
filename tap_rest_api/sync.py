@@ -10,7 +10,7 @@ from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
                      get_streams_to_sync, human_readable,
                      get_http_headers,
                      EXTRACT_TIMESTAMP)
-from .schema import filter_record, load_schema
+from .schema import filter_record, load_schema, validate
 
 
 LOGGER = singer.get_logger()
@@ -105,6 +105,10 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                 record = get_record(row, config.get("record_level"))
                 if filter_by_schema:
                     record = filter_record(record, schema)
+
+                    if not validate(record, schema):
+                        LOGGER.debug("Skipping the schema invalidated row %s" % record)
+                        continue
 
                 # It's important to compare the record before adding
                 # EXTRACT_TIMESTAMP

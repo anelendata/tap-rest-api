@@ -7,9 +7,17 @@ from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
                      get_record, get_record_list, get_http_headers,
                      EXTRACT_TIMESTAMP, BATCH_TIMESTAMP)
 from . import json2schema
-
+import jsonschema
 
 LOGGER = singer.get_logger()
+
+
+def validate(record, schema):
+    try:
+        jsonschema.validate(record, schema)
+    except jsonschema.exceptions.ValidationError:
+        return False
+    return True
 
 
 def filter_record(row, schema, on_invalid_property="force"):
