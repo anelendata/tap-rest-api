@@ -54,6 +54,10 @@ def _do_infer_schema(obj, record_level=None):
 
 
 def _compare_props(prop1, prop2):
+    if not prop2:
+        return prop1
+    elif not prop1:
+        return prop2
     prop = prop2
     t1 = prop1["type"]
     t2 = prop2["type"]
@@ -62,8 +66,8 @@ def _compare_props(prop1, prop2):
     if t1[1] == "object":
         assert(t1[1] == t2[1])
         for key in prop["properties"]:
-            prop["properties"][key] = _compare_props(prop1["properties"][key],
-                                                    prop2["properties"][key])
+            prop["properties"][key] = _compare_props(prop1["properties"].get(key),
+                                                     prop2["properties"].get(key))
     if t1[1] == "array":
         assert(t1[1] == t2[1])
         prop["items"] = _compare_props(prop1["items"], prop2["items"])
