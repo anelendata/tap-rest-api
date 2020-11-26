@@ -6,7 +6,7 @@ from singer import utils
 from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
                      get_record, get_record_list, get_http_headers,
                      EXTRACT_TIMESTAMP, BATCH_TIMESTAMP)
-from . import json2schema
+import getschema
 import jsonschema
 
 LOGGER = singer.get_logger()
@@ -24,8 +24,8 @@ def filter_record(row, schema, on_invalid_property="force"):
     """
     Parse the result into types
     """
-    return json2schema.filter_object(row, schema,
-                                     on_invalid_property=on_invalid_property)
+    return getschema.fix_type(row, schema,
+                              on_invalid_property=on_invalid_property)
 
 
 def load_schema(schema_dir, entity):
@@ -89,7 +89,7 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     # In case the record is not at the root level
     data = get_record_list(data, config.get("record_list_level"))
 
-    schema = json2schema.infer_schema(data, config.get("record_level"))
+    schema = getschema.infer_schema(data, config.get("record_level"))
     if add_tstamp:
         timestamp_format = {"type": ["null", "string"],
                             "format": "date-time"}
