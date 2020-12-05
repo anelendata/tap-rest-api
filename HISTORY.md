@@ -1,5 +1,11 @@
 ## History
 
+### 0.1.2 (2020-12-05)
+
+- When filter_by_schema: true in config, clean the record and filter out
+  invalid record against the schema.
+- Externalized json2schema.py as [getschema](https://pypi.org/project/getschema/)
+
 ### 0.1.1 (2020-11-08)
 
 - Custom header (See README.md)
