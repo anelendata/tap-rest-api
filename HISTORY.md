@@ -1,5 +1,9 @@
 ## History
 
+### 0.1.3 (2020-12-22)
+
+- Bump getschema version to 0.1.2 so it allows empty object (dict) entries
+
 ### 0.1.2 (2020-12-05)
 
 - When filter_by_schema: true in config, clean the record and filter out
