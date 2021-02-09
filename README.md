@@ -24,6 +24,12 @@ tap-rest-api | target-csv
 
 ## How to use it
 
+Install:
+
+```
+pip install tap-rest-api
+```
+
 The following example is created using [USGS Earthquake Events data](https://earthquake.usgs.gov/fdsnws/event/1/).
 
 `curl https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2014-01-01&endtime=2014-01-02&minmagnitude=1`
@@ -257,6 +263,13 @@ A use case for this mode is when you expect the schema to change or inconsistent
 and you rather want to extract and clean up post-loading.
 ([Example](https://articles.anelen.co/elt-google-cloud-storage-bigquery/))
 
+# About this project
+
+This project is developed by 
+ANELEN and friends. Please check out the ANELEN's
+[open innovation philosophy and other projects](https://anelen.co/open-source.html)
+
+![ANELEN](https://avatars.githubusercontent.com/u/13533307?s=400&u=a0d24a7330d55ce6db695c5572faf8f490c63898&v=4)
 ---
 
 Copyright &copy; 2020~ Anelen Co., LLC
