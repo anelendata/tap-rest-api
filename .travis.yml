@@ -15,6 +15,7 @@ install:
   - /opt/python/3.6/bin/python -m venv ./venv
   - source ./venv/bin/activate
   - which python
+  - pip install --upgrade pip
   - pip install wheel
   - pip install --no-cache -e .
   - pip install -r requirements_dev.txt
