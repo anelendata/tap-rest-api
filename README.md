@@ -121,8 +121,8 @@ file is used.
   "schema": "earthquakes",
   "items_per_page": 100,
   "offset_start": 1,
-  "auth_method": "no_auth"
-  "min_magnitude": 1,
+  "auth_method": "no_auth",
+  "min_magnitude": 1
 }
 ```
 
