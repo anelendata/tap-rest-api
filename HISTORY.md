@@ -1,5 +1,13 @@
 ## History
 
+### 0.2.1 (2021-05-02)
+
+- doc: add missing release history entry
+
+### 0.2.0 (2021-05-02)
+
+- feature: Set record_list_level and record_level, index_key, datetime_key, and timestamp_key with jsonpath.
+
 ### 0.1.3 (2020-12-22)
 
 - Bump getschema version to 0.1.2 so it allows empty object (dict) entries
