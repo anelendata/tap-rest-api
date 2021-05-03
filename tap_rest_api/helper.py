@@ -4,6 +4,8 @@ from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from dateutil.tz import tzoffset
 
+import jsonpath_ng as jsonpath
+
 import singer
 from singer import utils
 import singer.metrics as metrics
@@ -50,6 +52,12 @@ def human_readable(bookmark_type, t):
     return readable
 
 
+def _get_jsonpath(raw, path):
+    jsonpath_expr = jsonpath.parse(path)
+    record = [match.value for match in jsonpath_expr.find(raw)]
+    return record
+
+
 def get_record(raw_item, record_level):
     """
     Dig the items until the target schema
@@ -57,21 +65,20 @@ def get_record(raw_item, record_level):
     if not record_level:
         return raw_item
 
-    record = raw_item
-    for x in record_level.split(","):
-        record = record[x.strip()]
+    record = _get_jsonpath(raw_item, record_level)
+    if len(record) != 1:
+        raise Exception(f"jsonpath match records: {len(record)}, expected 1.")
 
-    return record
+    return record[0]
 
 
-def get_record_list(data, record_list_level):
+def get_record_list(raw_data, record_list_level):
     """
     Dig the raw data to the level that contains the list of the records
     """
     if not record_list_level:
-        return data
-    for x in record_list_level.split(","):
-        data = data[x.strip()]
+        return raw_data
+    data = _get_jsonpath(raw_data, record_list_level)
     return data
 
 
@@ -175,26 +182,25 @@ def get_end(config):
 def get_last_update(config, record, current):
     last_update = current
     if config.get("timestamp_key"):
-        key = config["timestamp_key"]
-        if (key in record) and record[key] > current:
+        value = _get_jsonpath(record, config["timestamp_key"])[0]
+        if value and value > current:
             # Handle the data with sub-seconds converted to int
-            ex_digits = len(str(int(record[key]))) - 10
-            last_update = float(record[key]) / (pow(10, ex_digits))
+            ex_digits = len(str(int(value))) - 10
+            last_update = float(value) / (pow(10, ex_digits))
         else:
             KeyError("timestamp_key not found in the record")
     elif config.get("datetime_key"):
-        key = config["datetime_key"]
-        if key not in record:
+        value = _get_jsonpath(record, config["datetime_key"])[0]
+        if not value:
             KeyError("datetime_key not found in the record")
 
-        record_datetime = parse_datetime_tz(record[key])
+        record_datetime = parse_datetime_tz(value)
         current_datetime = parse_datetime_tz(current)
 
         if record_datetime > current_datetime:
             last_update = record_datetime.isoformat()
     elif config.get("index_key"):
-        key = config["index_key"]
-        current_index = str(record.get(key))
+        current_index = str(_get_jsonpath(record, config["index_key"])[0])
         LOGGER.debug("Last update will be updated from %s to %s" %
                      (last_update, current_index))
         # When index is an integer, it's dangerous to compare 9 and 10 as

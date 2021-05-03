@@ -1,5 +1,7 @@
 [![Build Status](https://travis-ci.com/anelendata/tap_rest_api.svg?branch=master)](https://travis-ci.com/anelendata/tap_rest_api)
 
+💥 New in 0.2.0: Set record_list_level and record_level, index_key, datetime_key, and timestamp_key with jsonpath.
+
 # tap-rest-api
 
 A configurable REST API singer.io tap.
@@ -104,6 +106,8 @@ Anything you define here overwrites
 
 ### Step 3. Create Config file:
 
+**Please note jsonpath specification is supported version 0.2.0 and later only.**
+
 Now create a cofnig file. Note the difference between spec file and config file.
 The role of spec file is to create or alter the config specs, and the role of
 the config file is to provide the values to the config variables. When a value
@@ -115,9 +119,8 @@ file is used.
 ```
 {
   "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
-  "timestamp_key": "time",
-  "record_list_level": "features",
-  "record_level": "properties",
+  "record_list_level": "features[*]",
+  "timestamp_key": "properties.time",
   "schema": "earthquakes",
   "items_per_page": 100,
   "offset_start": 1,
@@ -153,6 +156,11 @@ corresponds to the data type.
   It works when the character between the date and time components is " " instead of "T".
 - index_key: A sequential index (integer or string)
 
+In USGS example, the individual record contains the top level objects `properties`
+and `geometry`. The timestamp key is `time` defined under `properties`, so the config
+value `timestamp_key` is set as `properties.time`, following
+[jsonpath](https://goessner.net/articles/JsonPath/) specification.
+
 When you specify timestamp_key, datetime_key, or index_key in the config,
 you also need to set start_timestamp, start_datetime, or start_index in
 config or as a command-line argument.
@@ -168,15 +176,30 @@ up when timestamp_key is set but start/end_timestamp is not set.
 
 - record_list_level:
   Some API wraps a set of records under a property. Others responds a newline separated JSONs.
-  For the former, we need to specify a key so the tap can find the record level. In USGS example,
-  we find "features" as the property that lists the records.
+  For the former, we need to specify a key so the tap can find the record level.
+  The USGS earthquake response is a single JSON object example. The records are listed under
+  features object. So the config value `record_list_level` is set as a jsonpath `features[*]`.
+
 - record_level:
   Under the individual record, there may be another layer of properties that separates
   the data and meta data and we may only be interested in the former. If this is the case,
-  we can specify record_level.
+  we can specify record_level. In USGS example, we can ignore `geometry` object and output
+  only the content of `properties` object. Set a jsonpath to `record_level` config value
+  to achieve this:
 
-Limitations: Currently, both record_list_level and record_level are a single string,
-making impossible to go down more than one level.
+```
+{
+  "url":"https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={start_datetime}&endtime={end_datetime}&minmagnitude={min_magnitude}&limit={items_per_page}&offset={current_offset}&eventtype=earthquake&orderby=time-asc",
+  "record_list_level": "features[*]",
+  "record_level": "properties",
+  "timestamp_key": "time",
+  "schema": "earthquakes",
+  "items_per_page": 100,
+  "offset_start": 1,
+  "auth_method": "no_auth",
+  "min_magnitude": 1
+}
+```
 
 ### Step 4. Create schema and catalog files
 
