@@ -164,7 +164,7 @@ def get_end(config):
     if config.get("timestamp_key"):
         end_from_config = config.get("end_timestamp")
         if end_from_config is None:
-            if config.get("end_timestamp") is not None:
+            if config.get("end_datetime") is not None:
                 end_from_config = dateutil.parser.parse(
                     config["end_datetime"]).timestamp()
             else:
