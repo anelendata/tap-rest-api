@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/anelendata/tap_rest_api.svg?branch=master)](https://travis-ci.com/anelendata/tap_rest_api)
+[![Build Status](https://travis-ci.com/anelendata/tap-rest-api.svg?branch=master)](https://travis-ci.com/anelendata/tap-rest-api)
 
 💥 New in 0.2.0: Set record_list_level and record_level, index_key, datetime_key, and timestamp_key with jsonpath.
 
