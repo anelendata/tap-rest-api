@@ -146,7 +146,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                             config["items_per_page"])
                 break
             if max_page and page_number + 1 >= max_page:
-                LOGGER.info("Max page %d reached. Finishing the extraction.")
+                LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
                 break
             if assume_sorted and end and next_last_update >= end:
                 LOGGER.info(("Record greater than %s and assume_sorted is" +
