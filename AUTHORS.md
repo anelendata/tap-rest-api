@@ -10,4 +10,5 @@ Development Lead
 Contributors
 ------------
 
-None yet. Why not be the first?
+* Louis Goddard (ltrgoddard)
+* Christian Gagnon (ReptilianBrain)
