@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.3 (2021-05-06)
+
+- fix: missing variable for max_page logging
+
 ### 0.2.2 (2021-05-03)
 
 - fix: end_datetime is not honored when timestamp_key is used #12
