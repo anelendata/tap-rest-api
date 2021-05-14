@@ -89,7 +89,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             params.update({"current_offset": offset_number})
             params.update({"last_update": last_update})
 
-            endpoint = get_endpoint(config["url"], tap_stream_id, params)
+            url = config.get("urls", {}).get(tap_stream_id, config["url"])
+            endpoint = get_endpoint(url, tap_stream_id, params)
             LOGGER.info("GET %s", endpoint)
 
             rows = generate_request(tap_stream_id, endpoint, auth_method,

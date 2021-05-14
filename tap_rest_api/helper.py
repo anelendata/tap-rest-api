@@ -248,9 +248,14 @@ def get_init_endpoint_params(config, state, tap_stream_id):
         params.update({"start_index": start})
         params.update({"end_index": end})
 
-    params.update({"current_page": config.get("page_start", 0)})
-    params.update({"current_offset": config.get("offset_start", 0)})
-    params.update({"last_update": start})
+    params.update(
+        {
+            "stream": tap_stream_id,
+            "current_page": config.get("page_start", 0),
+            "current_offset": config.get("offset_start", 0),
+            "last_update": start,
+         }
+    )
 
     return params
 
