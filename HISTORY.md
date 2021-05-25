@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.4 (2021-05-25)
+
+- fix: Infer schema mode produces null record that causes "CRITICAL list index out of range" (#16)
+
 ### 0.2.3 (2021-05-06)
 
 - fix: missing variable for max_page logging
