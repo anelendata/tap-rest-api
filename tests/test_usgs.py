@@ -13,7 +13,7 @@ def _prep_config():
     config["schema_dir"] = os.path.join(usgs_dir, "schema")
     config["catalog_dir"] = os.path.join(usgs_dir, "catalog")
     catalog = Catalog.load(os.path.join(usgs_dir, config["catalog_dir"],
-                                        "catalog.json"))
+                                        "earthquakes.json"))
     config["start_datetime"] = (datetime.datetime.now() -
                                 datetime.timedelta(hours=1)).isoformat()
     streams = {}
