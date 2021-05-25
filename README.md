@@ -218,7 +218,7 @@ Note:
 ### Step 5. Run the tap
 
 ```
-$ tap-rest-api ./custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --catalog ./catalog/earthquakes.json
+$ tap-rest-api ./custom_spec.json --config config/tap_config.json --start_datetime="2020-08-06" --catalog ./catalog/catalog.json
 ```
 
 ## Authentication

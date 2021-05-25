@@ -37,6 +37,12 @@
             "integer"
           ]
         },
+        "tz": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
         "url": {
           "type": [
             "null",
@@ -44,6 +50,30 @@
           ]
         },
         "detail": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "felt": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "cdi": {
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "mmi": {
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "alert": {
           "type": [
             "null",
             "string"
@@ -103,6 +133,12 @@
             "integer"
           ]
         },
+        "dmin": {
+          "type": [
+            "null",
+            "number"
+          ]
+        },
         "rms": {
           "type": [
             "null",
@@ -112,7 +148,7 @@
         "gap": {
           "type": [
             "null",
-            "integer"
+            "number"
           ]
         },
         "magType": {
