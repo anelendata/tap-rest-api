@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.5 (2021-06-04)
+
+- Update getschema to 0.2.5 to fix a bad null conversion
+
 ### 0.2.4 (2021-05-25)
 
 - fix: Infer schema mode produces null record that causes "CRITICAL list index out of range" (#16)
