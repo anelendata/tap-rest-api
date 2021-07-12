@@ -1,5 +1,10 @@
 ## History
 
+### 0.2.6 (2021-07-11)
+
+- Update getschema to 0.2.6 to fix a wrong rejection of null object when it's allowed.
+
+
 ### 0.2.5 (2021-06-04)
 
 - Update getschema to 0.2.5 to fix a bad null conversion

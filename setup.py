@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from setuptools import setup
 
-VERSION = "0.2.5"
+VERSION = "0.2.6"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -30,7 +30,7 @@ setup(
     install_requires=[
         "attrs>=18.1.0",
         "backoff==1.8.0",
-        "getschema>=0.2.5",
+        "getschema>=0.2.7",
         "jsonschema==2.6.0",
         "python-dateutil>=2.7.3",
         "requests>=2.20.0",
