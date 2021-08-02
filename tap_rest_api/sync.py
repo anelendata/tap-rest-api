@@ -4,12 +4,23 @@ import simplejson as json
 import singer
 import singer.metrics as metrics
 
-from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
-                     get_init_endpoint_params, get_last_update, get_record,
-                     get_record_list, get_selected_streams, get_start,
-                     get_streams_to_sync, human_readable,
-                     get_http_headers,
-                     EXTRACT_TIMESTAMP)
+from .helper import (
+    generate_request,
+    get_bookmark_type,
+    get_end,
+    get_endpoint,
+    get_init_endpoint_params,
+    get_last_update,
+    get_record,
+    get_record_list,
+    get_selected_streams,
+    get_start,
+    get_streams_to_sync,
+    human_readable,
+    get_http_headers,
+    get_digest_from_record,
+    EXTRACT_TIMESTAMP,
+)
 from .schema import filter_record, load_schema, validate
 
 
@@ -112,8 +123,15 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
 
                 # It's important to compare the record before adding
                 # EXTRACT_TIMESTAMP
-                if record == prev_written_record:
-                    LOGGER.debug("Skipping the duplicated row %s" % record)
+                digest = get_digest_from_record(record)
+                digest_dict = {"digest": digest}
+                # backward compatibility
+                if (prev_written_record == record or
+                        prev_written_record == digest_dict):
+                    LOGGER.info(
+                        "Skipping the duplicated row with "
+                        f"digest {digest}"
+                    )
                     continue
 
                 if EXTRACT_TIMESTAMP in schema["properties"].keys():
@@ -137,7 +155,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                     # EXTRACT_TIMESTAMP will be different. So popping it out
                     # before storing.
                     record.pop(EXTRACT_TIMESTAMP)
-                    prev_written_record = record
+                    digest = get_digest_from_record(record)
+                    prev_written_record = {"digest": digest}
 
             # Exit conditions
             if len(rows) < config["items_per_page"]:

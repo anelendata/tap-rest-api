@@ -1,4 +1,4 @@
-import attr, backoff, dateutil, datetime, os, requests
+import attr, backoff, dateutil, datetime, hashlib, os, requests
 import simplejson as json
 from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
@@ -177,6 +177,13 @@ def get_end(config):
     elif config.get("index_key"):
         end_from_config = config.get("end_index")
     return end_from_config
+
+
+def get_digest_from_record(record):
+    digest = hashlib.md5(
+        json.dumps(record, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    return digest
 
 
 def get_last_update(config, record, current):
