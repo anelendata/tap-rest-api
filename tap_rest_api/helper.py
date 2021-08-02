@@ -139,7 +139,7 @@ def get_start(config, state, tap_stream_id, bookmark_key):
                     not config.get("start_datetime")):
                 raise KeyError("timestamp_key is set but neither " +
                                "start_timestamp or start_datetime is set")
-            current_bookmark = config.get("start_timestamp")
+            current_bookmark = get_float_timestamp(config.get("start_timestamp"))
             if current_bookmark is None:
                 current_bookmark = dateutil.parser.parse(
                     config["start_datetime"]).timestamp()
