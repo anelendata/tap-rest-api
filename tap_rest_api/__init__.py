@@ -173,6 +173,8 @@ def main():
         streams = CONFIG["streams"].split(",")
     elif CONFIG.get("schema"):
         streams = [CONFIG["schema"]]
+    else:
+        raise Exception("Config needs to specify streams or schema variable.")
 
     for stream in streams:
         stream = stream.strip()

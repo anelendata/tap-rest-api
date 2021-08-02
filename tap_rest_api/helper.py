@@ -186,14 +186,21 @@ def get_digest_from_record(record):
     return digest
 
 
+def get_float_timestamp(ts):
+    # Handle the data with sub-seconds converted to int
+    ex_digits = len(str(int(ts))) - 10
+    value = float(ts) / (pow(10, ex_digits))
+    return value
+
+
 def get_last_update(config, record, current):
     last_update = current
     if config.get("timestamp_key"):
         value = _get_jsonpath(record, config["timestamp_key"])[0]
-        if value and value > current:
-            # Handle the data with sub-seconds converted to int
-            ex_digits = len(str(int(value))) - 10
-            last_update = float(value) / (pow(10, ex_digits))
+        if value:
+            value = get_float_timestamp(value)
+            if value > current:
+                last_update = value
         else:
             KeyError("timestamp_key not found in the record")
     elif config.get("datetime_key"):

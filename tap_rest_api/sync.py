@@ -11,6 +11,7 @@ from .helper import (
     get_endpoint,
     get_init_endpoint_params,
     get_last_update,
+    get_float_timestamp,
     get_record,
     get_record_list,
     get_selected_streams,
@@ -175,6 +176,10 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             page_number +=1
             offset_number += len(rows)
 
+    # If timestamp_key is not integerized, do so at millisecond level
+    if config.get("timestamp_key") and len(str(int(last_update))) == 10:
+        last_update = int(last_update * 1000)
+
     state = singer.write_bookmark(state, tap_stream_id, "last_update",
                                   last_update)
     if prev_written_record:
@@ -233,7 +238,7 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
         last_update = state["bookmarks"][stream.tap_stream_id]["last_update"]
         if bookmark_type == "timestamp":
             last_update = str(last_update) + " (" + str(
-                datetime.datetime.fromtimestamp(last_update)) + ")"
+                datetime.datetime.fromtimestamp(get_float_timestamp(last_update))) + ")"
         LOGGER.info("%s End sync" % stream.tap_stream_id)
         LOGGER.info("%s Last record's %s: %s" %
                     (stream.tap_stream_id, bookmark_type, last_update))
