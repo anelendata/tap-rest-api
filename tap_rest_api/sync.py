@@ -4,12 +4,24 @@ import simplejson as json
 import singer
 import singer.metrics as metrics
 
-from .helper import (generate_request, get_bookmark_type, get_end, get_endpoint,
-                     get_init_endpoint_params, get_last_update, get_record,
-                     get_record_list, get_selected_streams, get_start,
-                     get_streams_to_sync, human_readable,
-                     get_http_headers,
-                     EXTRACT_TIMESTAMP)
+from .helper import (
+    generate_request,
+    get_bookmark_type,
+    get_end,
+    get_endpoint,
+    get_init_endpoint_params,
+    get_last_update,
+    get_float_timestamp,
+    get_record,
+    get_record_list,
+    get_selected_streams,
+    get_start,
+    get_streams_to_sync,
+    human_readable,
+    get_http_headers,
+    get_digest_from_record,
+    EXTRACT_TIMESTAMP,
+)
 from .schema import filter_record, load_schema, validate
 
 
@@ -113,8 +125,15 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
 
                 # It's important to compare the record before adding
                 # EXTRACT_TIMESTAMP
-                if record == prev_written_record:
-                    LOGGER.debug("Skipping the duplicated row %s" % record)
+                digest = get_digest_from_record(record)
+                digest_dict = {"digest": digest}
+                # backward compatibility
+                if (prev_written_record == record or
+                        prev_written_record == digest_dict):
+                    LOGGER.info(
+                        "Skipping the duplicated row with "
+                        f"digest {digest}"
+                    )
                     continue
 
                 if EXTRACT_TIMESTAMP in schema["properties"].keys():
@@ -138,7 +157,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                     # EXTRACT_TIMESTAMP will be different. So popping it out
                     # before storing.
                     record.pop(EXTRACT_TIMESTAMP)
-                    prev_written_record = record
+                    digest = get_digest_from_record(record)
+                    prev_written_record = {"digest": digest}
 
             # Exit conditions
             if len(rows) < config["items_per_page"]:
@@ -156,6 +176,10 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
 
             page_number +=1
             offset_number += len(rows)
+
+    # If timestamp_key is not integerized, do so at millisecond level
+    if config.get("timestamp_key") and len(str(int(last_update))) == 10:
+        last_update = int(last_update * 1000)
 
     state = singer.write_bookmark(state, tap_stream_id, "last_update",
                                   last_update)
@@ -215,7 +239,7 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
         last_update = state["bookmarks"][stream.tap_stream_id]["last_update"]
         if bookmark_type == "timestamp":
             last_update = str(last_update) + " (" + str(
-                datetime.datetime.fromtimestamp(last_update)) + ")"
+                datetime.datetime.fromtimestamp(get_float_timestamp(last_update))) + ")"
         LOGGER.info("%s End sync" % stream.tap_stream_id)
         LOGGER.info("%s Last record's %s: %s" %
                     (stream.tap_stream_id, bookmark_type, last_update))
