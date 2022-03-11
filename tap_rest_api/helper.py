@@ -298,7 +298,7 @@ def _giveup(exc):
         and exc.response.status_code != 429
 
 
-@utils.backoff((backoff.expo, requests.exceptions.RequestException), _giveup)
+@utils.backoff((requests.exceptions.RequestException,), _giveup)
 @utils.ratelimit(20, 1)
 def generate_request(stream_id, url, auth_method="no_auth", headers=None,
                      username=None, password=None):
