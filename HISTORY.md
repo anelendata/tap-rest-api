@@ -1,5 +1,10 @@
 ## History
 
+### 0.2.7 (2022-03-11)
+
+- Use digest for dup check instead of raw record enhancement #24
+- Wrong params for singer.utils.backoff decorator bug #27
+
 ### 0.2.6 (2021-07-11)
 
 - Update getschema to 0.2.6 to fix a wrong rejection of null object when it's allowed.
