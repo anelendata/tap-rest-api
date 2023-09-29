@@ -109,13 +109,21 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                                     headers,
                                     config.get("username"),
                                     config.get("password"))
-            rows = get_record_list(rows, config.get("record_list_level"))
+
+            record_list_level = config.get("record_list_level")
+            if record_list_level:
+                record_list_level = record_list_level.format(**{"stream": stream})
+            record_level = config.get("record_level")
+            if record_level:
+                record_level = record_level.format(**{"stream": stream})
+
+            rows = get_record_list(rows, record_list_level)
 
             LOGGER.info("Current page %d" % page_number)
             LOGGER.info("Current offset %d" % offset_number)
 
             for row in rows:
-                record = get_record(row, config.get("record_level"))
+                record = get_record(row, record_level)
                 if filter_by_schema:
                     record = filter_record(record, schema)
 

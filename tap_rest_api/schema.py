@@ -90,8 +90,14 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
                                 config.get("password"))
 
         # In case the record is not at the root level
-        data = get_record_list(data, config.get("record_list_level"))
-        schema = getschema.infer_schema(data, config.get("record_level"))
+        record_list_level = config.get("record_list_level")
+        if isinstance(record_list_level, dict):
+            record_list_level = record_list_level.get(stream)
+        record_level = config.get("record_level")
+        if isinstance(record_level, dict):
+            record_level = record_level.get(stream)
+        data = get_record_list(data, record_list_level)
+        schema = getschema.infer_schema(data, record_level)
 
         if add_tstamp:
             timestamp_format = {"type": ["null", "string"],
