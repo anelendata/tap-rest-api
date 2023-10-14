@@ -80,9 +80,20 @@ def parse_args(spec_file, required_config_keys):
 
     # Capture additional args
     for arg in SPEC["args"].keys():
+        type_list = SPEC["args"][arg]["type"]
+        type_ = None
+        if isinstance(type_list, list):
+            for t in type_list:
+                if t.lower() in ["object", "array"]:
+                    continue
+                type_ = t
+        else:
+            type_ = type_list
+        if not type_:
+            raise Exception("Config spec exception at {arg}")
         parser.add_argument(
             "--" + arg,
-            type=TYPES[SPEC["args"][arg]["type"]],
+            type=TYPES[type_],
             default=SPEC["args"][arg].get("default"),
             help=SPEC["args"][arg].get("help"),
             required=SPEC["args"][arg].get("required", False))

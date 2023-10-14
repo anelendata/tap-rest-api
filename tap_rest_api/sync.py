@@ -6,7 +6,7 @@ import singer.metrics as metrics
 
 from .helper import (
     generate_request,
-    get_bookmark_type,
+    get_bookmark_type_and_key,
     get_end,
     get_endpoint,
     get_init_endpoint_params,
@@ -40,9 +40,9 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     """
     schema = load_schema(config["schema_dir"], tap_stream_id)
     params = get_init_endpoint_params(config, state, tap_stream_id)
-    bookmark_type = get_bookmark_type(config)
+    bookmark_type, _ = get_bookmark_type_and_key(config, tap_stream_id)
     start = get_start(config, state, tap_stream_id, "last_update")
-    end = get_end(config)
+    end = get_end(config, tap_stream_id)
 
     headers = get_http_headers(config)
 
@@ -110,12 +110,13 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                                     config.get("username"),
                                     config.get("password"))
 
+            # In case the record is not at the root level
             record_list_level = config.get("record_list_level")
-            if record_list_level:
-                record_list_level = record_list_level.format(**{"stream": stream})
+            if isinstance(record_list_level, dict):
+                record_list_level = record_list_level.get(tap_stream_id)
             record_level = config.get("record_level")
-            if record_level:
-                record_level = record_level.format(**{"stream": stream})
+            if isinstance(record_level, dict):
+                record_level = record_level.get(tap_stream_id)
 
             rows = get_record_list(rows, record_list_level)
 
@@ -150,7 +151,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                         tzinfo=datetime.timezone.utc)
                     record[EXTRACT_TIMESTAMP] = extract_tstamp.isoformat()
 
-                next_last_update = get_last_update(config, record, last_update)
+                next_last_update = get_last_update(config, tap_stream_id, record, last_update)
 
                 if not end or next_last_update < end:
                     if raw_output:
@@ -186,7 +187,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             offset_number += len(rows)
 
     # If timestamp_key is not integerized, do so at millisecond level
-    if config.get("timestamp_key") and len(str(int(last_update))) == 10:
+    if bookmark_type == "timestamp" and len(str(int(last_update))) == 10:
         last_update = int(last_update * 1000)
 
     state = singer.write_bookmark(state, tap_stream_id, "last_update",
@@ -243,7 +244,7 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
             LOGGER.critical(e)
             raise e
 
-        bookmark_type = get_bookmark_type(config)
+        bookmark_type, _ = get_bookmark_type_and_key(config, stream.tap_stream_id)
         last_update = state["bookmarks"][stream.tap_stream_id]["last_update"]
         if bookmark_type == "timestamp":
             last_update = str(last_update) + " (" + str(
