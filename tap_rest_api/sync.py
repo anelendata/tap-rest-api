@@ -40,7 +40,23 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     """
     schema = load_schema(config["schema_dir"], tap_stream_id)
     params = get_init_endpoint_params(config, state, tap_stream_id)
+
+    dt_keys = config.get("datetime_key")
+    if isinstance(dt_keys, str):
+        raise Exception(f"{tap_stream_id}: {dt_keys}, {config}")
+    i_keys = config.get("index_key")
+    if isinstance(i_keys, str):
+        raise Exception(f"{tap_stream_id}: {i_keys}, {config}")
+
     bookmark_type, _ = get_bookmark_type_and_key(config, tap_stream_id)
+
+    dt_keys = config.get("datetime_key")
+    if isinstance(dt_keys, str):
+        raise Exception(f"{tap_stream_id}: {dt_keys}, {config}")
+    i_keys = config.get("index_key")
+    if isinstance(i_keys, str):
+        raise Exception(f"{tap_stream_id}: {i_keys}, {config}")
+
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config, tap_stream_id)
 
@@ -151,7 +167,11 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                         tzinfo=datetime.timezone.utc)
                     record[EXTRACT_TIMESTAMP] = extract_tstamp.isoformat()
 
-                next_last_update = get_last_update(config, tap_stream_id, record, last_update)
+                try:
+                    next_last_update = get_last_update(config, tap_stream_id, record, last_update)
+                except Exception as e:
+                    LOGGER.error(f"Error with the record:\n    {row}\n    message: {e}")
+                    raise
 
                 if not end or next_last_update < end:
                     if raw_output:
@@ -226,23 +246,51 @@ def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
     LOGGER.info("Starting sync. Will sync these streams: %s" %
                 [stream.tap_stream_id for stream in selected_streams])
 
+    if not state.get("bookmarks"):
+        state["bookmarks"] = {}
     for stream in selected_streams:
+        dt_keys = config.get("datetime_key")
+        if isinstance(dt_keys, str):
+            raise Exception(f"{stream.tap_stream_id}: {dt_keys}, {config}")
+        i_keys = config.get("index_key")
+        if isinstance(i_keys, str):
+            raise Exception(f"{stream.tap_stream_id}: {i_keys}, {config}")
+
         LOGGER.info("%s Start sync" % stream.tap_stream_id)
 
-        singer.set_currently_syncing(state, stream.tap_stream_id)
+        current_state = dict(state)
+        singer.set_currently_syncing(current_state, stream.tap_stream_id)
         if raw is False:
-            singer.write_state(state)
+            singer.write_state(current_state)
+
+        dt_keys = config.get("datetime_key")
+        if isinstance(dt_keys, str):
+            raise Exception(f"{stream.tap_stream_id}: {dt_keys}, {config}")
+        i_keys = config.get("index_key")
+        if isinstance(i_keys, str):
+            raise Exception(f"{stream.tap_stream_id}: {i_keys}, {config}")
 
         try:
-            state = sync_rows(config, state, stream.tap_stream_id,
-                              max_page=max_page,
-                              auth_method=auth_method,
-                              assume_sorted=assume_sorted,
-                              raw_output=raw,
-                              filter_by_schema=filter_by_schema)
+            sync_rows(
+                config,
+                current_state,
+                stream.tap_stream_id,
+                max_page=max_page,
+                auth_method=auth_method,
+                assume_sorted=assume_sorted,
+                raw_output=raw,
+                filter_by_schema=filter_by_schema)
         except Exception as e:
             LOGGER.critical(e)
             raise e
+
+        if not state["bookmarks"].get(stream.tap_stream_id):
+            state["bookmarks"][stream.tap_stream_id] = current_state["bookmarks"][stream.tap_stream_id]
+        else:
+            state["bookmarks"][stream.tap_stream_id].update(
+                current_state["bookmarks"][stream.tap_stream_id])
+        if raw is False:
+            singer.write_state(state)
 
         bookmark_type, _ = get_bookmark_type_and_key(config, stream.tap_stream_id)
         last_update = state["bookmarks"][stream.tap_stream_id]["last_update"]

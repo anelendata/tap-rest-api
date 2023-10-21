@@ -270,6 +270,77 @@ Here is the default value:
 When you define http_headers config value, the default value is nullified.
 So you should redefine "User-Agent" and "Content-type" when you need them.
 
+## Multiple streams
+
+tap-rest-api suports settings for multiple streams.
+
+- `url` is set as string for default value.
+- `urls` is a dictionary to overwrite the default `url` for the specified stream ID given as the dictionary key
+- `{stream}` can be used as parameter in URL.
+- `timestamp_key`, `datetime_key`, `index_key` can be set either as string or dictionary. If a stream ID exists in the dictionary key in one of the items, it will be used. If not, the key defaults a string defined one with priotiry (timestamp_key > datetime_key > index_key.
+- Active streams must be defined as a comma separated stream IDs either in the config file or in the command `--stream <streams>`
+- Streams must be registered in catalog file with `selected: true` ([example](https://github.com/anelendata/tap-rest-api/blob/master/examples/usgs/catalog/earthquakes.json))
+
+Here is an example for [Chargify API](https://developers.chargify.com/docs/api-docs)
+
+```
+{
+  "url": "https://{{ subdomain }}.chargify.com/{stream}.json?direction=asc&per_page={items_per_page}&page={current_page_one_base}&date_field={datetime_key}&start_datetime={start_datetime}",
+  "urls": {
+    "events": "https://{{ subdomain }}.chargify.com/events.json?direction=asc&per_page={items_per_page}&page={current_page_one_base}&date_field=created_at&since_id={start_index}",
+    "price_points": "https://{{ subdomain }}.chargify.com/products_price_points.json?direction=asc&per_page={items_per_page}&page={current_page_one_base}&filter[date_field]=updated_at&filter[start_datetime]={start_datetime}&filter[end_datetime]={end_datetime}",
+    "segments": "https://{{ subdomain }}.chargify.com/components/{{ component_id }}/price_points/{{ price_point_id }}/segments.json?per_page={items_per_page}&page={current_page_one_base}",
+    "statements": "https://{{ subdomain }}.chargify.com/statements.json?direction=asc&per_page={items_per_page}&page={current_page_one_base}&sort=created_at",
+    "transactions": "https://{{ subdomain }}.chargify.com/transactions.json?direction=asc&per_page={items_per_page}&page={current_page_one_base}&since_id={start_index}&order_by=id",
+    "customers_meta": "https://{{ subdomain }}.chargify.com/customers/metadata.json?direction=asc&date_field=updated_at&per_page={items_per_page}&page={current_page_one_base}&with_deleted=true&start_datetime={start_datetime}&end_datetime={end_datetime}",
+    "subscriptions_meta": "https://{{ subdomain }}.chargify.com/subscriptions/metadata.json?direction=asc&date_field=updated_at&per_page={items_per_page}&page={current_page_one_base}&with_deleted=true&start_datetime={start_datetime}&end_datetime={end_datetime}"
+  },
+  "streams": "components,coupons,customers,events,invoices,price_points,products,product_families,subscriptions,subscriptions_components,transactions",
+  "auth_method": "basic",
+  "username": "{{ api_key }}",
+  "password": "x",
+  "record_list_level": {
+    "customers_meta": "$.metadata[*]",
+    "invoices": "$.invoices[*]",
+    "price_points": "$.price_points[*]",
+    "segments": "$.segments[*]",
+    "subscriptions_components": "$.subscriptions_components[*]",
+    "subscriptions_meta": "$.metadata[*]"
+  },
+  "record_level": {
+    "components": "$.component",
+    "coupons": "$.coupon",
+    "customers": "$.customer",
+    "events": "$.event",
+    "product_families": "$.product_family",
+    "products": "$.product",
+    "statements": "$.statement",
+    "subscriptions": "$.subscription",
+    "transactions": "$.transaction"
+  },
+  "datetime_key": {
+    "components": "updated_at",
+    "coupons": "updated_at",
+    "customers": "updated_at",
+    "invoices": "updated_at",
+    "price_points": "updated_at",
+    "product_families": "updated_at",
+    "products": "updated_at",
+    "subscriptions": "updated_at",
+    "subscriptions_components": "updated_at"
+  },
+  "index_key": {
+    "events": "id",
+    "transactions": "id",
+    "segments": "id",
+    "statements": "id",
+    "customers_meta": "id",
+    "subscriptions_meta": "id"
+  },
+  "items_per_page": 200
+}
+```
+
 ## State
 
 This tap emits [state](https://github.com/singer-io/getting-started/blob/master/docs/CONFIG_AND_STATE.md#state-file).

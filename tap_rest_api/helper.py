@@ -96,6 +96,7 @@ def get_bookmark_type_and_key(config, stream):
     ts_keys = config.get("timestamp_key")
     dt_keys = config.get("datetime_key")
     i_keys = config.get("index_key")
+
     if ts_keys:
         if isinstance(ts_keys, dict) and ts_keys.get(stream):
             return "timestamp", ts_keys.get(stream)
@@ -114,18 +115,20 @@ def get_bookmark_type_and_key(config, stream):
         elif isinstance(i_keys, str) and bm_type is None:
             bm_type = "index"
             bm_key = i_keys
+
     if bm_type and bm_key:
         return bm_type, bm_key
+
     raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
 
 
 def get_streams_to_sync(streams, state):
     '''Get the streams to sync'''
     current_stream = singer.get_currently_syncing(state)
-    result = streams
+    result = dict(streams)
 
     if current_stream:
-        for key in result.keys():
+        for key in streams.keys():
             if result[key].tap_stream_id != current_stream:
                 result.pop(key, None)
 
@@ -201,9 +204,8 @@ def get_end(config, tap_stream_id):
             else:
                 end_from_config = datetime.datetime.now().timestamp()
     elif bookmark_type == "datetime":
-        if config.get("end_datetime") is not None:
-            end_from_config = config.get("end_datetime")
-        else:
+        end_from_config = config.get("end_datetime")
+        if not end_from_config:
             end_from_config = datetime.datetime.now().isoformat()
     elif bookmark_type == "index":
         end_from_config = config.get("end_index")
@@ -272,28 +274,44 @@ def get_last_update(config, tap_stream_id, record, current):
 
 
 def get_init_endpoint_params(config, state, tap_stream_id):
-    params = config
+    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
+    params = dict(config)
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config, tap_stream_id)
-    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
     if bookmark_type == "timestamp":
+        start_datetime = datetime.datetime.fromtimestamp(start).isoformat()
+        end_datetime = datetime.datetime.fromtimestamp(end).isoformat()
         params.update({
             "start_timestamp": start,
             "end_timestamp": end,
-            "start_datetime": datetime.datetime.fromtimestamp(start).isoformat(),
-            "end_datetime": datetime.datetime.fromtimestamp(end).isoformat(),
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "start_date": start_datetime[0:10],
+            "end_date": end_datetime[0:10],
             "timestamp_key": bookmark_key,
         })
     elif bookmark_type == "datetime":
         params.update({
-            "start_datetime": start,
-            "end_datetime": end,
             "start_timestamp": dateutil.parser.parse(start).timestamp(),
             "end_timestamp": dateutil.parser.parse(end).timestamp(),
+            "start_datetime": start,
+            "end_datetime": end,
+            "start_date": start[0:10],
+            "end_date": end[0:10],
             "datetime_key": bookmark_key,
         })
     elif bookmark_type == "index":
+        start_datetime = config.get("start_datetime")
+        start_date = start_datetime[0:10] if start_datetime else None
+        end_datetime = config.get("end_datetime")
+        if not end_datetime:
+            end_datetime = datetime.datetime.utcnow().isoformat()
+        end_date = end_datetime[0:10] if end_datetime else None
         params.update({
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "start_date": start_date,
+            "end_date": end_date,
             "start_index": start,
             "end_index": end,
             "index_key": bookmark_key,

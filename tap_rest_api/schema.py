@@ -24,8 +24,12 @@ def filter_record(row, schema, on_invalid_property="force"):
     """
     Parse the result into types
     """
-    return getschema.fix_type(row, schema,
-                              on_invalid_property=on_invalid_property)
+    return getschema.fix_type(
+        row,
+        schema,
+        on_invalid_property=on_invalid_property,
+        date_to_datetime=True,
+    )
 
 
 def load_schema(schema_dir, entity):
@@ -65,7 +69,7 @@ def discover(config, streams):
     json.dump(json_str, sys.stdout, indent=2)
 
 
-def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
+def infer_schema(config, streams, out_catalog=True, add_tstamp=True, max_page=None):
     """
     Infer schema from the sample record list and write JSON schema and
     catalog files under schema directory and catalog directory.
@@ -79,25 +83,48 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
         params = get_init_endpoint_params(config, {}, tap_stream_id)
 
         url = config.get("urls", {}).get(tap_stream_id, config["url"])
-        endpoint = get_endpoint(url, tap_stream_id, params)
-        LOGGER.info("GET %s", endpoint)
         auth_method = config.get("auth_method", "basic")
-
         headers = get_http_headers(config)
-        data = generate_request(tap_stream_id, endpoint, auth_method,
-                                headers,
-                                config.get("username"),
-                                config.get("password"))
+        records = []
+        page_number = 0
+        offset_number = 0
+        while True:
+            params.update({"current_page": page_number})
+            params.update({"current_page_one_base": page_number + 1})
+            params.update({"current_offset": offset_number})
 
-        # In case the record is not at the root level
-        record_list_level = config.get("record_list_level")
-        if isinstance(record_list_level, dict):
-            record_list_level = record_list_level.get(stream)
-        record_level = config.get("record_level")
-        if isinstance(record_level, dict):
-            record_level = record_level.get(stream)
-        data = get_record_list(data, record_list_level)
-        schema = getschema.infer_schema(data, record_level)
+            endpoint = get_endpoint(url, tap_stream_id, params)
+            LOGGER.info("GET %s", endpoint)
+            data = generate_request(tap_stream_id, endpoint, auth_method,
+                                    headers,
+                                    config.get("username"),
+                                    config.get("password"))
+
+            # In case the record is not at the root level
+            record_list_level = config.get("record_list_level")
+            if isinstance(record_list_level, dict):
+                record_list_level = record_list_level.get(stream)
+            record_level = config.get("record_level")
+            if isinstance(record_level, dict):
+                record_level = record_level.get(stream)
+            data = get_record_list(data, record_list_level)
+            records += data
+
+            # Exit conditions
+            if len(data) < config["items_per_page"]:
+                LOGGER.info(("Response is less than set item per page (%d)." +
+                             "Finishing the extraction") %
+                            config["items_per_page"])
+                break
+            if max_page and page_number + 1 >= max_page:
+                LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
+                break
+
+            page_number +=1
+            offset_number += len(data)
+
+
+        schema = getschema.infer_schema(records, record_level)
 
         if add_tstamp:
             timestamp_format = {"type": ["null", "string"],
