@@ -1,5 +1,11 @@
 ## History
 
+### 0.2.8 (2023-10-20)
+
+- Multiple stream sync
+  Support URLs and parameters per stream
+  See https://github.com/anelendata/tap-rest-api#multiple-streams
+
 ### 0.2.7 (2022-03-11)
 
 - Use digest for dup check instead of raw record enhancement #24
