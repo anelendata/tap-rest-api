@@ -47,8 +47,11 @@ def parse_datetime_tz(datetime_str, default_tz_offset=0):
 def human_readable(bookmark_type, t):
     readable = t
     if t is not None and bookmark_type == "timestamp":
-        readable = str(t) + " (" + str(
-            datetime.datetime.fromtimestamp(t)) + ")"
+        try:
+            ds = datetime.datetime.fromtimestamp(t)
+        except:
+            raise Exception("bookmark type is set to timestamp, but the value {t} isn't timestamp")
+        readable = f"{str(t)} ({str(ds)})"
     return readable
 
 
@@ -82,23 +85,50 @@ def get_record_list(raw_data, record_list_level):
     return data
 
 
-def get_bookmark_type(config):
-    if config.get("timestamp_key"):
-        return "timestamp"
-    if config.get("datetime_key"):
-        return "datetime"
-    if config.get("index_key"):
-        return "index"
+def get_bookmark_type_and_key(config, stream):
+    """
+    If config value timestamp_key, datetime_key, or index_key is a dictionary
+    and has value for the stream, it will be prioritized.
+    Otherwise, timestamp_key > datetime_key > index_key
+    """
+    bm_type = None
+    bm_key = None
+    ts_keys = config.get("timestamp_key")
+    dt_keys = config.get("datetime_key")
+    i_keys = config.get("index_key")
+
+    if ts_keys:
+        if isinstance(ts_keys, dict) and ts_keys.get(stream):
+            return "timestamp", ts_keys.get(stream)
+        elif isinstance(ts_keys, str):
+            bm_type = "timestamp"
+            bm_key = ts_keys
+    if dt_keys:
+        if isinstance(dt_keys, dict) and dt_keys.get(stream):
+            return "datetime", dt_keys.get(stream)
+        elif isinstance(dt_keys, str) and bm_type is None:
+            bm_type = "datetime"
+            bm_key = dt_keys
+    if i_keys:
+        if isinstance(i_keys, dict) and i_keys.get(stream):
+            return "index", i_keys.get(stream)
+        elif isinstance(i_keys, str) and bm_type is None:
+            bm_type = "index"
+            bm_key = i_keys
+
+    if bm_type and bm_key:
+        return bm_type, bm_key
+
     raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
 
 
 def get_streams_to_sync(streams, state):
     '''Get the streams to sync'''
     current_stream = singer.get_currently_syncing(state)
-    result = streams
+    result = dict(streams)
 
     if current_stream:
-        for key in result.keys():
+        for key in streams.keys():
             if result[key].tap_stream_id != current_stream:
                 result.pop(key, None)
 
@@ -133,8 +163,9 @@ def get_start(config, state, tap_stream_id, bookmark_key):
     up when timestamp_key is set but start_timestamp is not set.
     """
     current_bookmark = singer.get_bookmark(state, tap_stream_id, bookmark_key)
+    bookmark_type, _ = get_bookmark_type_and_key(config, tap_stream_id)
     if current_bookmark is None:
-        if config.get("timestamp_key"):
+        if bookmark_type == "timestamp":
             if (not config.get("start_timestamp") and
                     not config.get("start_datetime")):
                 raise KeyError("timestamp_key is set but neither " +
@@ -145,12 +176,12 @@ def get_start(config, state, tap_stream_id, bookmark_key):
                     config["start_datetime"]).timestamp()
             else:
                 current_bookmark = get_float_timestamp(current_bookmark)
-        elif config.get("datetime_key"):
+        elif bookmark_type == "datetime":
             if not config.get("start_datetime"):
                 raise KeyError(
                     "datetime_key is set but start_datetime is not set")
             current_bookmark = config.get("start_datetime")
-        elif config.get("index_key"):
+        elif bookmark_type == "index":
             if config.get("start_index") is None:
                 raise KeyError("index_key is set but start_index is not set")
             current_bookmark = config.get("start_index")
@@ -158,12 +189,13 @@ def get_start(config, state, tap_stream_id, bookmark_key):
     return current_bookmark
 
 
-def get_end(config):
+def get_end(config, tap_stream_id):
     """
     For human convenience, end_datetime (more human readable) is also looked
     up when timestamp_key is set but end_timestamp is not set.
     """
-    if config.get("timestamp_key"):
+    bookmark_type, _ = get_bookmark_type_and_key(config, tap_stream_id)
+    if bookmark_type == "timestamp":
         end_from_config = config.get("end_timestamp")
         if end_from_config is None:
             if config.get("end_datetime") is not None:
@@ -171,12 +203,11 @@ def get_end(config):
                     config["end_datetime"]).timestamp()
             else:
                 end_from_config = datetime.datetime.now().timestamp()
-    elif config.get("datetime_key"):
-        if config.get("end_datetime") is not None:
-            end_from_config = config.get("end_datetime")
-        else:
+    elif bookmark_type == "datetime":
+        end_from_config = config.get("end_datetime")
+        if not end_from_config:
             end_from_config = datetime.datetime.now().isoformat()
-    elif config.get("index_key"):
+    elif bookmark_type == "index":
         end_from_config = config.get("end_index")
     return end_from_config
 
@@ -195,18 +226,19 @@ def get_float_timestamp(ts):
     return value
 
 
-def get_last_update(config, record, current):
+def get_last_update(config, tap_stream_id, record, current):
     last_update = current
-    if config.get("timestamp_key"):
-        value = _get_jsonpath(record, config["timestamp_key"])[0]
+    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
+    if bookmark_type == "timestamp":
+        value = _get_jsonpath(record, bookmark_key)[0]
         if value:
             value = get_float_timestamp(value)
             if value > current:
                 last_update = value
         else:
             KeyError("timestamp_key not found in the record")
-    elif config.get("datetime_key"):
-        value = _get_jsonpath(record, config["datetime_key"])[0]
+    elif bookmark_type == "datetime":
+        value = _get_jsonpath(record, bookmark_key)[0]
         if not value:
             KeyError("datetime_key not found in the record")
 
@@ -215,8 +247,8 @@ def get_last_update(config, record, current):
 
         if record_datetime > current_datetime:
             last_update = record_datetime.isoformat()
-    elif config.get("index_key"):
-        current_index = str(_get_jsonpath(record, config["index_key"])[0])
+    elif bookmark_type == "index":
+        current_index = str(_get_jsonpath(record, bookmark_key)[0])
         LOGGER.debug("Last update will be updated from %s to %s" %
                      (last_update, current_index))
         # When index is an integer, it's dangerous to compare 9 and 10 as
@@ -242,27 +274,48 @@ def get_last_update(config, record, current):
 
 
 def get_init_endpoint_params(config, state, tap_stream_id):
-    params = config
+    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
+    params = dict(config)
     start = get_start(config, state, tap_stream_id, "last_update")
-    end = get_end(config)
-
-    if config.get("timestamp_key"):
-        params.update({"start_timestamp": start})
-        params.update({"end_timestamp": end})
-        params.update({"start_datetime":
-                       datetime.datetime.fromtimestamp(start).isoformat()})
-        params.update({"end_datetime":
-                       datetime.datetime.fromtimestamp(end).isoformat()})
-    elif config.get("datetime_key"):
-        params.update({"start_datetime": start})
-        params.update({"end_datetime": end})
-        params.update({"start_timestamp":
-                       dateutil.parser.parse(start).timestamp()})
-        params.update({"end_timestamp":
-                       dateutil.parser.parse(end).timestamp()})
-    elif config.get("index_key"):
-        params.update({"start_index": start})
-        params.update({"end_index": end})
+    end = get_end(config, tap_stream_id)
+    if bookmark_type == "timestamp":
+        start_datetime = datetime.datetime.fromtimestamp(start).isoformat()
+        end_datetime = datetime.datetime.fromtimestamp(end).isoformat()
+        params.update({
+            "start_timestamp": start,
+            "end_timestamp": end,
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "start_date": start_datetime[0:10],
+            "end_date": end_datetime[0:10],
+            "timestamp_key": bookmark_key,
+        })
+    elif bookmark_type == "datetime":
+        params.update({
+            "start_timestamp": dateutil.parser.parse(start).timestamp(),
+            "end_timestamp": dateutil.parser.parse(end).timestamp(),
+            "start_datetime": start,
+            "end_datetime": end,
+            "start_date": start[0:10],
+            "end_date": end[0:10],
+            "datetime_key": bookmark_key,
+        })
+    elif bookmark_type == "index":
+        start_datetime = config.get("start_datetime")
+        start_date = start_datetime[0:10] if start_datetime else None
+        end_datetime = config.get("end_datetime")
+        if not end_datetime:
+            end_datetime = datetime.datetime.utcnow().isoformat()
+        end_date = end_datetime[0:10] if end_datetime else None
+        params.update({
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "start_date": start_date,
+            "end_date": end_date,
+            "start_index": start,
+            "end_index": end,
+            "index_key": bookmark_key,
+        })
 
     params.update(
         {

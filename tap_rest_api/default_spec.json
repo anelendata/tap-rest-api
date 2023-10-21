@@ -69,9 +69,9 @@
 
         "timestamp_key":
         {
-            "type": "string",
+            "type": ["string", "object"],
             "default": null,
-            "help": "POSIX timestamp key(column) name. If this is not null, timestamp_key is ignored"
+            "help": "POSIX timestamp key(column) name. If this is not null, timestamp_key is ignored. Use dictionary to specify per stream."
         },
         "start_timestamp":
         {
@@ -88,9 +88,9 @@
 
         "datetime_key":
         {
-            "type": "string",
+            "type": ["string", "object"],
             "default": null,
-            "help": "Datetime key(column) name. If this is not null, timestamp_key is ignored"
+            "help": "Datetime key(column) name. If this is not null, timestamp_key is ignored. Use dictionary to specify per stream."
         },
         "start_datetime":
         {
@@ -107,9 +107,9 @@
 
         "index_key":
         {
-            "type": "string",
+            "type": ["string", "object"],
             "default": null,
-            "help": "Index key (column) name"
+            "help": "Index key (column) name. Use dictionary to specify per stream."
         },
         "start_index":
         {
