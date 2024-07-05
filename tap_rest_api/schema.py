@@ -69,13 +69,13 @@ def discover(config, streams):
     json.dump(json_str, sys.stdout, indent=2)
 
 
-def infer_schema(config, streams, out_catalog=True, add_tstamp=True, max_page=None):
+def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     """
     Infer schema from the sample record list and write JSON schema and
     catalog files under schema directory and catalog directory.
-    To fully support multiple streams, the catalog files must be consolidated
-    but that is not supported in this function yet.
     """
+    max_page = config.get("max_page")
+
     schemas = {}
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id

@@ -223,22 +223,27 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     return state
 
 
-def sync(config, streams, state, catalog, assume_sorted=True, max_page=None,
-         auth_method="basic", raw=False, filter_by_schema=True):
+def sync(config, streams, state, catalog, raw=False):
     """
     Sync the streams that were selected
 
+    - max_page: Stop after making this number of API call is made.
     - assume_sorted: Assume the data to be sorted and exit the process as soon
       as a record having greater than end index/datetime/timestamp is detected.
-    - max_page: Stop after making this number of API call is made.
     - auth_method: HTTP auth method (basic, no_auth, digest)
-    - raw: Output raw JSON records to stdout
     - filter_by_schema: When True, check the extracted records against the
       schema and undefined/unmatching fields won't be written out.
+    - raw: Output raw JSON records to stdout
     """
+    max_page = CONFIG.get("max_page")
+    auth_method = CONFIG.get("auth_method", "basic")
+    assume_sorted = CONFIG.get("assume_sorted", True)
+    filter_by_schema = CONFIG.get("filter_by_schema", True)
+
     start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(streams, state)
     selected_streams = get_selected_streams(remaining_streams, catalog)
+
     if len(selected_streams) < 1:
         raise Exception("No Streams selected, please check that you have a " +
                         "schema selected in your catalog")
