@@ -57,6 +57,9 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     if isinstance(i_keys, str):
         raise Exception(f"{tap_stream_id}: {i_keys}, {config}")
 
+    on_invalid_property = config.get("on_invalid_property", "force")
+    drop_unknown_properties = config.get("drop_unknown_properties", False)
+
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config, tap_stream_id)
 
@@ -89,6 +92,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
 
     # Initialize the counters
     last_update = start
+    next_last_update = None
 
     # Offset is the number of records (vs. page)
     offset_number = params.get("current_offset", 0)
@@ -142,7 +146,12 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             for row in rows:
                 record = get_record(row, record_level)
                 if filter_by_schema:
-                    record = filter_record(record, schema)
+                    record = filter_record(
+                            record,
+                            schema,
+                            on_invalid_property=on_invalid_property,
+                            drop_unknown_properties=drop_unknown_properties,
+                            )
 
                     if not validate(record, schema):
                         LOGGER.debug("Skipping the schema invalidated row %s" % record)
@@ -198,7 +207,7 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             if max_page and page_number + 1 >= max_page:
                 LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
                 break
-            if assume_sorted and end and next_last_update >= end:
+            if assume_sorted and end and (next_last_update and next_last_update >= end):
                 LOGGER.info(("Record greater than %s and assume_sorted is" +
                              " set. Finishing the extraction.") % end)
                 break
@@ -235,10 +244,10 @@ def sync(config, streams, state, catalog, raw=False):
       schema and undefined/unmatching fields won't be written out.
     - raw: Output raw JSON records to stdout
     """
-    max_page = CONFIG.get("max_page")
-    auth_method = CONFIG.get("auth_method", "basic")
-    assume_sorted = CONFIG.get("assume_sorted", True)
-    filter_by_schema = CONFIG.get("filter_by_schema", True)
+    max_page = config.get("max_page")
+    auth_method = config.get("auth_method", "basic")
+    assume_sorted = config.get("assume_sorted", True)
+    filter_by_schema = config.get("filter_by_schema", True)
 
     start_process_at = datetime.datetime.now()
     remaining_streams = get_streams_to_sync(streams, state)

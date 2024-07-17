@@ -20,16 +20,26 @@ def validate(record, schema):
     return True
 
 
-def filter_record(row, schema, on_invalid_property="force"):
+def filter_record(
+    row,
+    schema,
+    on_invalid_property="force",
+    drop_unknown_properties=False):
     """
     Parse the result into types
     """
-    return getschema.fix_type(
-        row,
-        schema,
-        on_invalid_property=on_invalid_property,
-        date_to_datetime=True,
-    )
+    try:
+        cleaned = getschema.fix_type(
+            row,
+            schema,
+            on_invalid_property=on_invalid_property,
+            drop_unknown_properties=drop_unknown_properties,
+            date_to_datetime=True,
+        )
+    except Exception as e:
+        LOGGER.debug(row)
+        raise e
+    return cleaned
 
 
 def load_schema(schema_dir, entity):

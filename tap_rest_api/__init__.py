@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, os, sys
+import argparse, logging, os, sys
 import simplejson as json
 import singer
 from singer import utils
@@ -9,6 +9,13 @@ from .helper import Stream, get_abs_path
 from .sync import sync
 from .schema import discover, infer_schema
 
+LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 LOGGER = singer.get_logger()
 
 SPEC_FILE = "./tap_rest_api_spec.json"
@@ -112,6 +119,11 @@ def parse_args(spec_file, required_config_keys):
         '--catalog',
         help='Catalog file')
 
+    parser.add_argument(
+        '-l', '--loglevel',
+        help='Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)',
+        default='INFO')
+
     # commands
     parser.add_argument(
         '-r', '--raw',
@@ -174,6 +186,13 @@ def main():
         CONFIG[arg] = args_dict[arg]
 
     STATE = {}
+
+    if args.loglevel:
+        log_level = LOG_LEVELS.get(args.loglevel.upper())
+        if not log_level:
+            raise (f"Log level must be one of {','.join(LOG_LEVELS)}")
+        LOGGER.setLevel(log_level)
+
 
     if CONFIG.get("streams"):
         streams = CONFIG["streams"].split(",")

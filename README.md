@@ -357,6 +357,24 @@ A use case for this mode is when you expect the schema to change or inconsistent
 and you rather want to extract and clean up post-loading.
 ([Example](https://articles.anelen.co/elt-google-cloud-storage-bigquery/))
 
+## Schema validation and cleanups
+
+- on_invalid_property: Behavior when schema validation fails.
+  - "raise": Raise exception
+  - "null": Impute with null
+  - "force" (default): Keep the record value as is (string). This may fail in the singer target.
+- drop_unknown_properties: If true, record will exclude unknown (sub-)properties before it's being written to stdout. Default is false.
+
+Config example to add them:
+```
+{
+...
+  "on_invalid_property": "force",
+  "drop_unknown_properties": true,
+...
+}
+```
+
 # About this project
 
 This project is developed by 
