@@ -1,5 +1,11 @@
 ## History
 
+### 0.2.9 (2024-07-16)
+
+- Config switch to drop unknown (sub-)properties.
+  See https://github.com/anelendata/tap-rest-api#schema-validation-and-cleanups
+
+
 ### 0.2.8 (2023-10-20)
 
 - Multiple stream sync
