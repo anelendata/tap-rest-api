@@ -104,6 +104,30 @@
             "default": null,
             "help": "End datetime in ISO 8601 format. When this is set, tap only replicates the record with datetime younger than end_datetime.  Once equal or greater than end_datetime is read, the process exits. As a convenience, this will be automatically converted to timestamp if datetime_key is null and timestamp_key is set and end_timestamp is null."
         },
+        "url_param_datetime_format":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Datetime format (e.g. '%Y-%m-%d %H:%M:%S.%f'') for URL parameter. If this is set, start_datetime and end_datetime will be converted to this format. If not set, start_datetime and end_datetime will be converted to ISO 8601 format."
+        },
+        "url_param_isoformat_sep":
+        {
+            "type": "string",
+            "default": "T",
+            "help": "Separator between date and time in ISO 8601 format"
+        },
+        "url_param_isoformat_timespec":
+        {
+            "type": "string",
+            "default": "auto",
+            "help": "Timespec in ISO 8601 format"
+        },
+        "url_param_isoformat_use_zulu":
+        {
+            "type": "boolean",
+            "default": false,
+            "help": "When UTC, replace +00:00 with Z"
+        },
 
         "index_key":
         {

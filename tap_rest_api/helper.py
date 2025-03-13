@@ -153,6 +153,19 @@ def get_selected_streams(remaining_streams, annotated_schema):
 
     return selected_streams
 
+def format_datetime(
+        config: dict,
+        dt: datetime.datetime,
+        ):
+    if config.get("url_param_datetime_format"):
+        dt_str = dt.strftime(config["url_param_datetime_format"])
+    else:
+        sep = config.get("url_param_isoformat_sep", "T")
+        timespec = config.get("url_param_isoformat_timespec", "auto")
+        dt_str = dt.isoformat(sep, timespec)
+    if config.get("url_param_isoformat_use_zulu"):
+        dt_str = dt_str.replace("+00:00", "Z")
+    return dt_str
 
 def get_start(config, state, tap_stream_id, bookmark_key):
     """
@@ -206,7 +219,7 @@ def get_end(config, tap_stream_id):
     elif bookmark_type == "datetime":
         end_from_config = config.get("end_datetime")
         if not end_from_config:
-            end_from_config = datetime.datetime.now().isoformat()
+            end_from_config = format_datetime(config, datetime.datetime.now())
     elif bookmark_type == "index":
         end_from_config = config.get("end_index")
     return end_from_config
@@ -246,7 +259,7 @@ def get_last_update(config, tap_stream_id, record, current):
         current_datetime = parse_datetime_tz(current)
 
         if record_datetime > current_datetime:
-            last_update = record_datetime.isoformat()
+            last_update = format_datetime(config, record_datetime)
     elif bookmark_type == "index":
         current_index = str(_get_jsonpath(record, bookmark_key)[0])
         LOGGER.debug("Last update will be updated from %s to %s" %
@@ -279,8 +292,8 @@ def get_init_endpoint_params(config, state, tap_stream_id):
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config, tap_stream_id)
     if bookmark_type == "timestamp":
-        start_datetime = datetime.datetime.fromtimestamp(start).isoformat()
-        end_datetime = datetime.datetime.fromtimestamp(end).isoformat()
+        start_datetime = format_datetime(config, datetime.datetime.fromtimestamp(start))
+        end_datetime = format_datetime(config, datetime.datetime.fromtimestamp(end))
         params.update({
             "start_timestamp": start,
             "end_timestamp": end,
@@ -305,7 +318,7 @@ def get_init_endpoint_params(config, state, tap_stream_id):
         start_date = start_datetime[0:10] if start_datetime else None
         end_datetime = config.get("end_datetime")
         if not end_datetime:
-            end_datetime = datetime.datetime.utcnow().isoformat()
+            end_datetime = format_datetime(config, datetime.datetime.utcnow())
         end_date = end_datetime[0:10] if end_datetime else None
         params.update({
             "start_datetime": start_datetime,
