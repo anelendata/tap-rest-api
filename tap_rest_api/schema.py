@@ -4,7 +4,7 @@ import singer
 from singer import utils
 
 from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
-                     get_record, get_record_list, get_http_headers,
+                     get_record, get_record_list, get_http_headers, unnest,
                      EXTRACT_TIMESTAMP, BATCH_TIMESTAMP)
 import getschema
 import jsonschema
@@ -56,7 +56,7 @@ def load_discovered_schema(schema_dir, stream):
     return schema
 
 
-def _discover_schemas(schema_dir, streams, schema):
+def _discover_schemas(schema_dir, streams):
     '''Iterate through streams, push to an array and return'''
     result = {'streams': []}
     for key in streams.keys():
@@ -74,8 +74,7 @@ def discover(config, streams):
     JSON dump the schemas to stdout
     """
     LOGGER.info("Loading Schemas")
-    json_str = _discover_schemas(config["schema_dir"], streams,
-                                 config["schema"])
+    json_str = _discover_schemas(config["schema_dir"], streams)
     json.dump(json_str, sys.stdout, indent=2)
 
 
@@ -118,6 +117,13 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
             if isinstance(record_level, dict):
                 record_level = record_level.get(stream)
             data = get_record_list(data, record_list_level)
+
+            unnest_cols = config.get("unnest", {}).get(tap_stream_id, [])
+            if unnest_cols:
+                for i in range(0, len(data)):
+                    for u in unnest_cols:
+                        data[i] = unnest(data[i], u["path"], u["target"])
+
             records += data
 
             # Exit conditions

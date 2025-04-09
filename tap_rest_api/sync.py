@@ -20,6 +20,7 @@ from .helper import (
     human_readable,
     get_http_headers,
     get_digest_from_record,
+    unnest,
     EXTRACT_TIMESTAMP,
 )
 from .schema import filter_record, load_schema, validate
@@ -41,21 +42,14 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
     schema = load_schema(config["schema_dir"], tap_stream_id)
     params = get_init_endpoint_params(config, state, tap_stream_id)
 
-    dt_keys = config.get("datetime_key")
+    dt_keys = config.get("datetime_keys")
     if isinstance(dt_keys, str):
         raise Exception(f"{tap_stream_id}: {dt_keys}, {config}")
-    i_keys = config.get("index_key")
+    i_keys = config.get("index_keys")
     if isinstance(i_keys, str):
         raise Exception(f"{tap_stream_id}: {i_keys}, {config}")
 
     bookmark_type, _ = get_bookmark_type_and_key(config, tap_stream_id)
-
-    dt_keys = config.get("datetime_key")
-    if isinstance(dt_keys, str):
-        raise Exception(f"{tap_stream_id}: {dt_keys}, {config}")
-    i_keys = config.get("index_key")
-    if isinstance(i_keys, str):
-        raise Exception(f"{tap_stream_id}: {i_keys}, {config}")
 
     on_invalid_property = config.get("on_invalid_property", "force")
     drop_unknown_properties = config.get("drop_unknown_properties", False)
@@ -145,6 +139,11 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
 
             for row in rows:
                 record = get_record(row, record_level)
+
+                unnest_cols = config.get("unnest", {}).get(tap_stream_id, [])
+                for u in unnest_cols:
+                    record = unnest(record, u["path"], u["target"])
+
                 if filter_by_schema:
                     record = filter_record(
                             record,
@@ -153,9 +152,9 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                             drop_unknown_properties=drop_unknown_properties,
                             )
 
-                    if not validate(record, schema):
-                        LOGGER.debug("Skipping the schema invalidated row %s" % record)
-                        continue
+                if not validate(record, schema):
+                    LOGGER.debug("Skipping the schema invalidated row %s" % record)
+                    continue
 
                 # It's important to compare the record before adding
                 # EXTRACT_TIMESTAMP
@@ -263,10 +262,10 @@ def sync(config, streams, state, catalog, raw=False):
     if not state.get("bookmarks"):
         state["bookmarks"] = {}
     for stream in selected_streams:
-        dt_keys = config.get("datetime_key")
+        dt_keys = config.get("datetime_keys")
         if isinstance(dt_keys, str):
             raise Exception(f"{stream.tap_stream_id}: {dt_keys}, {config}")
-        i_keys = config.get("index_key")
+        i_keys = config.get("index_keys")
         if isinstance(i_keys, str):
             raise Exception(f"{stream.tap_stream_id}: {i_keys}, {config}")
 
@@ -276,13 +275,6 @@ def sync(config, streams, state, catalog, raw=False):
         singer.set_currently_syncing(current_state, stream.tap_stream_id)
         if raw is False:
             singer.write_state(current_state)
-
-        dt_keys = config.get("datetime_key")
-        if isinstance(dt_keys, str):
-            raise Exception(f"{stream.tap_stream_id}: {dt_keys}, {config}")
-        i_keys = config.get("index_key")
-        if isinstance(i_keys, str):
-            raise Exception(f"{stream.tap_stream_id}: {i_keys}, {config}")
 
         try:
             sync_rows(

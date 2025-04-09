@@ -69,6 +69,12 @@
 
         "timestamp_key":
         {
+            "type": "string",
+            "default": null,
+            "help": "The default POSIX timestamp key(column) name when stream key is missing in timestamp_keys. If this is not null, timestamp_key is ignored."
+        },
+        "timestamp_keys":
+        {
             "type": ["string", "object"],
             "default": null,
             "help": "POSIX timestamp key(column) name. If this is not null, timestamp_key is ignored. Use dictionary to specify per stream."
@@ -87,6 +93,12 @@
         },
 
         "datetime_key":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Default datetime key(column) name when stream key is missing from datetime_keys. If this is not null, timestamp_key is ignored."
+        },
+        "datetime_keys":
         {
             "type": ["string", "object"],
             "default": null,
@@ -131,10 +143,17 @@
 
         "index_key":
         {
+            "type": "string",
+            "default": null,
+            "help": "Index key (column) name when disctionary stream key is missing in index_keys."
+        },
+        "index_keys":
+        {
             "type": ["string", "object"],
             "default": null,
             "help": "Index key (column) name. Use dictionary to specify per stream."
         },
+
         "start_index":
         {
             "type": "integer",
@@ -184,6 +203,25 @@
             "type": "string",
             "default": null,
             "help": "Set this like 'level_a,level_b...' if the target object is at raw_individual_record[level_a][level_b]..."
+        },
+        "unnest":
+        {
+            "type": ["string", "object"],
+            "default": null,
+            "help": "Set this like unnest: {'<stream_id>': [{'path': '$.some.json.path', 'target': 'top_level_col_name'}, ...], ...}"
+        },
+
+        "on_invalid_property":
+        {
+            "type": "string",
+            "default": "force",
+            "help": "Behavior when the schema validation fails. 'raise': Raise exception. 'null': Impute with null. 'force' (default): Keep the record value as is (string). This may fail in the singer target."
+        },
+        "drop_unknown_properties":
+        {
+            "type": "boolean",
+            "default": false,
+            "help": "If true, record will exclude unknown (sub-)properties before it's being written to stdout. Default is false."
         }
     }
 }

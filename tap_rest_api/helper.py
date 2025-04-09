@@ -85,6 +85,13 @@ def get_record_list(raw_data, record_list_level):
     return data
 
 
+def unnest(data, json_path, target_col_name):
+    obj = _get_jsonpath(data, json_path)
+    if (obj):
+        data[target_col_name] = obj[0]
+    return data
+
+
 def get_bookmark_type_and_key(config, stream):
     """
     If config value timestamp_key, datetime_key, or index_key is a dictionary
@@ -93,31 +100,26 @@ def get_bookmark_type_and_key(config, stream):
     """
     bm_type = None
     bm_key = None
-    ts_keys = config.get("timestamp_key")
-    dt_keys = config.get("datetime_key")
-    i_keys = config.get("index_key")
+    ts_key = config.get("timestamp_key")
+    dt_key = config.get("datetime_key")
+    i_key = config.get("index_key")
+    ts_keys = config.get("timestamp_keys")
+    dt_keys = config.get("datetime_keys")
+    i_keys = config.get("index_keys")
 
-    if ts_keys:
-        if isinstance(ts_keys, dict) and ts_keys.get(stream):
-            return "timestamp", ts_keys.get(stream)
-        elif isinstance(ts_keys, str):
-            bm_type = "timestamp"
-            bm_key = ts_keys
-    if dt_keys:
-        if isinstance(dt_keys, dict) and dt_keys.get(stream):
-            return "datetime", dt_keys.get(stream)
-        elif isinstance(dt_keys, str) and bm_type is None:
-            bm_type = "datetime"
-            bm_key = dt_keys
-    if i_keys:
-        if isinstance(i_keys, dict) and i_keys.get(stream):
-            return "index", i_keys.get(stream)
-        elif isinstance(i_keys, str) and bm_type is None:
-            bm_type = "index"
-            bm_key = i_keys
+    if isinstance(ts_keys, dict) and ts_keys.get(stream):
+        return "timestamp", ts_keys.get(stream)
+    if isinstance(dt_keys, dict) and dt_keys.get(stream):
+        return "datetime", dt_keys.get(stream)
+    if isinstance(i_keys, dict) and i_keys.get(stream):
+        return "index", i_keys.get(stream)
 
-    if bm_type and bm_key:
-        return bm_type, bm_key
+    if ts_key:
+        return "timestamp", ts_key
+    if dt_key:
+        return "datetime", dt_key
+    if i_key:
+        return "index", i_key
 
     raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
 
