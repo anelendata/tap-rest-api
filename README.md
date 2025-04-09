@@ -172,6 +172,19 @@ is sorted by the field.
 For human convenience, start/end_datetime (more human readable) is also looked
 up when timestamp_key is set but start/end_timestamp is not set.
 
+
+#### Multi-streams: timestamp_keys, datetime_keys, index_keys
+
+These dictionary values are used when you want to specify different bookmark types for each stream.
+
+```
+{
+...
+  "datetime_keys": {
+    "some_stream": "modified_at"
+  }
+```
+
 #### Record list level and record level
 
 - record_list_level:
@@ -200,6 +213,25 @@ up when timestamp_key is set but start/end_timestamp is not set.
   "min_magnitude": 1
 }
 ```
+
+#### unnest
+
+When you want to flatten a nested record, the config below will grab the record["some_nested_col"]["modified_at"] and put it in record["modified_at"]:
+
+```
+{
+...
+  "unnest": {
+    "some_stream": [
+      {
+        "path": "$.some_nested_col.modified_at",
+        "target": "modified_at",
+    ],
+    ...
+  },
+```
+
+Note: The schema and catalog must reflect the schema after unnesting. To aid this, infer_schema also does this transformation before determining the schema.
 
 ### Step 4. Create schema and catalog files
 
@@ -277,7 +309,8 @@ tap-rest-api suports settings for multiple streams.
 - `url` is set as string for default value.
 - `urls` is a dictionary to overwrite the default `url` for the specified stream ID given as the dictionary key
 - `{stream}` can be used as parameter in URL.
-- `timestamp_key`, `datetime_key`, `index_key` can be set either as string or dictionary. If a stream ID exists in the dictionary key in one of the items, it will be used. If not, the key defaults a string defined one with priotiry (timestamp_key > datetime_key > index_key.
+- `timestamp_keys`, `datetime_keys`, `index_keys` can be set as dictionary. If a stream ID exists in the dictionary key in one of the items, it will be used. If not, the key defaults to a string defined one with priotiry (timestamp_key > datetime_key > index_key.
+- `datetime_key`, `timestamp_key`, and `index_key` are set as string and the default bookmark keys.
 - Active streams must be defined as a comma separated stream IDs either in the config file or in the command `--stream <streams>`
 - Streams must be registered in catalog file with `selected: true` ([example](https://github.com/anelendata/tap-rest-api/blob/master/examples/usgs/catalog/earthquakes.json))
 

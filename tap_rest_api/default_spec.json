@@ -69,6 +69,12 @@
 
         "timestamp_key":
         {
+            "type": "string",
+            "default": null,
+            "help": "The default POSIX timestamp key(column) name when stream key is missing in timestamp_keys. If this is not null, timestamp_key is ignored."
+        },
+        "timestamp_keys":
+        {
             "type": ["string", "object"],
             "default": null,
             "help": "POSIX timestamp key(column) name. If this is not null, timestamp_key is ignored. Use dictionary to specify per stream."
@@ -88,6 +94,12 @@
 
         "datetime_key":
         {
+            "type": "string",
+            "default": null,
+            "help": "Default datetime key(column) name when stream key is missing from datetime_keys. If this is not null, timestamp_key is ignored."
+        },
+        "datetime_keys":
+        {
             "type": ["string", "object"],
             "default": null,
             "help": "Datetime key(column) name. If this is not null, timestamp_key is ignored. Use dictionary to specify per stream."
@@ -104,13 +116,44 @@
             "default": null,
             "help": "End datetime in ISO 8601 format. When this is set, tap only replicates the record with datetime younger than end_datetime.  Once equal or greater than end_datetime is read, the process exits. As a convenience, this will be automatically converted to timestamp if datetime_key is null and timestamp_key is set and end_timestamp is null."
         },
+        "url_param_datetime_format":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Datetime format (e.g. '%Y-%m-%d %H:%M:%S.%f'') for URL parameter. If this is set, start_datetime and end_datetime will be converted to this format. If not set, start_datetime and end_datetime will be converted to ISO 8601 format."
+        },
+        "url_param_isoformat_sep":
+        {
+            "type": "string",
+            "default": "T",
+            "help": "Separator between date and time in ISO 8601 format"
+        },
+        "url_param_isoformat_timespec":
+        {
+            "type": "string",
+            "default": "auto",
+            "help": "Timespec in ISO 8601 format"
+        },
+        "url_param_isoformat_use_zulu":
+        {
+            "type": "boolean",
+            "default": false,
+            "help": "When UTC, replace +00:00 with Z"
+        },
 
         "index_key":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Index key (column) name when disctionary stream key is missing in index_keys."
+        },
+        "index_keys":
         {
             "type": ["string", "object"],
             "default": null,
             "help": "Index key (column) name. Use dictionary to specify per stream."
         },
+
         "start_index":
         {
             "type": "integer",
@@ -160,6 +203,25 @@
             "type": "string",
             "default": null,
             "help": "Set this like 'level_a,level_b...' if the target object is at raw_individual_record[level_a][level_b]..."
+        },
+        "unnest":
+        {
+            "type": ["string", "object"],
+            "default": null,
+            "help": "Set this like unnest: {'<stream_id>': [{'path': '$.some.json.path', 'target': 'top_level_col_name'}, ...], ...}"
+        },
+
+        "on_invalid_property":
+        {
+            "type": "string",
+            "default": "force",
+            "help": "Behavior when the schema validation fails. 'raise': Raise exception. 'null': Impute with null. 'force' (default): Keep the record value as is (string). This may fail in the singer target."
+        },
+        "drop_unknown_properties":
+        {
+            "type": "boolean",
+            "default": false,
+            "help": "If true, record will exclude unknown (sub-)properties before it's being written to stdout. Default is false."
         }
     }
 }

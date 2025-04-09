@@ -85,6 +85,13 @@ def get_record_list(raw_data, record_list_level):
     return data
 
 
+def unnest(data, json_path, target_col_name):
+    obj = _get_jsonpath(data, json_path)
+    if (obj):
+        data[target_col_name] = obj[0]
+    return data
+
+
 def get_bookmark_type_and_key(config, stream):
     """
     If config value timestamp_key, datetime_key, or index_key is a dictionary
@@ -93,31 +100,26 @@ def get_bookmark_type_and_key(config, stream):
     """
     bm_type = None
     bm_key = None
-    ts_keys = config.get("timestamp_key")
-    dt_keys = config.get("datetime_key")
-    i_keys = config.get("index_key")
+    ts_key = config.get("timestamp_key")
+    dt_key = config.get("datetime_key")
+    i_key = config.get("index_key")
+    ts_keys = config.get("timestamp_keys")
+    dt_keys = config.get("datetime_keys")
+    i_keys = config.get("index_keys")
 
-    if ts_keys:
-        if isinstance(ts_keys, dict) and ts_keys.get(stream):
-            return "timestamp", ts_keys.get(stream)
-        elif isinstance(ts_keys, str):
-            bm_type = "timestamp"
-            bm_key = ts_keys
-    if dt_keys:
-        if isinstance(dt_keys, dict) and dt_keys.get(stream):
-            return "datetime", dt_keys.get(stream)
-        elif isinstance(dt_keys, str) and bm_type is None:
-            bm_type = "datetime"
-            bm_key = dt_keys
-    if i_keys:
-        if isinstance(i_keys, dict) and i_keys.get(stream):
-            return "index", i_keys.get(stream)
-        elif isinstance(i_keys, str) and bm_type is None:
-            bm_type = "index"
-            bm_key = i_keys
+    if isinstance(ts_keys, dict) and ts_keys.get(stream):
+        return "timestamp", ts_keys.get(stream)
+    if isinstance(dt_keys, dict) and dt_keys.get(stream):
+        return "datetime", dt_keys.get(stream)
+    if isinstance(i_keys, dict) and i_keys.get(stream):
+        return "index", i_keys.get(stream)
 
-    if bm_type and bm_key:
-        return bm_type, bm_key
+    if ts_key:
+        return "timestamp", ts_key
+    if dt_key:
+        return "datetime", dt_key
+    if i_key:
+        return "index", i_key
 
     raise KeyError("You need to set timestamp_key, datetime_key, or index_key")
 
@@ -153,6 +155,19 @@ def get_selected_streams(remaining_streams, annotated_schema):
 
     return selected_streams
 
+def format_datetime(
+        config: dict,
+        dt: datetime.datetime,
+        ):
+    if config.get("url_param_datetime_format"):
+        dt_str = dt.strftime(config["url_param_datetime_format"])
+    else:
+        sep = config.get("url_param_isoformat_sep", "T")
+        timespec = config.get("url_param_isoformat_timespec", "auto")
+        dt_str = dt.isoformat(sep, timespec)
+    if config.get("url_param_isoformat_use_zulu"):
+        dt_str = dt_str.replace("+00:00", "Z")
+    return dt_str
 
 def get_start(config, state, tap_stream_id, bookmark_key):
     """
@@ -206,7 +221,7 @@ def get_end(config, tap_stream_id):
     elif bookmark_type == "datetime":
         end_from_config = config.get("end_datetime")
         if not end_from_config:
-            end_from_config = datetime.datetime.now().isoformat()
+            end_from_config = format_datetime(config, datetime.datetime.now())
     elif bookmark_type == "index":
         end_from_config = config.get("end_index")
     return end_from_config
@@ -246,7 +261,7 @@ def get_last_update(config, tap_stream_id, record, current):
         current_datetime = parse_datetime_tz(current)
 
         if record_datetime > current_datetime:
-            last_update = record_datetime.isoformat()
+            last_update = format_datetime(config, record_datetime)
     elif bookmark_type == "index":
         current_index = str(_get_jsonpath(record, bookmark_key)[0])
         LOGGER.debug("Last update will be updated from %s to %s" %
@@ -279,8 +294,8 @@ def get_init_endpoint_params(config, state, tap_stream_id):
     start = get_start(config, state, tap_stream_id, "last_update")
     end = get_end(config, tap_stream_id)
     if bookmark_type == "timestamp":
-        start_datetime = datetime.datetime.fromtimestamp(start).isoformat()
-        end_datetime = datetime.datetime.fromtimestamp(end).isoformat()
+        start_datetime = format_datetime(config, datetime.datetime.fromtimestamp(start))
+        end_datetime = format_datetime(config, datetime.datetime.fromtimestamp(end))
         params.update({
             "start_timestamp": start,
             "end_timestamp": end,
@@ -305,7 +320,7 @@ def get_init_endpoint_params(config, state, tap_stream_id):
         start_date = start_datetime[0:10] if start_datetime else None
         end_datetime = config.get("end_datetime")
         if not end_datetime:
-            end_datetime = datetime.datetime.utcnow().isoformat()
+            end_datetime = format_datetime(config, datetime.datetime.utcnow())
         end_date = end_datetime[0:10] if end_datetime else None
         params.update({
             "start_datetime": start_datetime,

@@ -97,7 +97,7 @@ def parse_args(spec_file, required_config_keys):
         else:
             type_ = type_list
         if not type_:
-            raise Exception("Config spec exception at {arg}")
+            raise Exception(f"Config spec exception at {arg}")
         parser.add_argument(
             "--" + arg,
             type=TYPES[type_],
