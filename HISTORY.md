@@ -1,5 +1,11 @@
 ## History
 
+### 0.2.10 (2025-09-02)
+
+- New feature: unnest a sub-field in a struct
+- Set bookmark key per stream
+- url_param_ options for datetime format and isoformat flavors (see default_spec.json)
+
 ### 0.2.9 (2024-07-16)
 
 - Config switch to drop unknown (sub-)properties.
