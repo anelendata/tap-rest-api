@@ -1,5 +1,8 @@
 ## History
 
+### 0.2.11 (2025-09-02)
+- fix dependency versions
+
 ### 0.2.10 (2025-09-02)
 
 - New feature: unnest a sub-field in a struct
