@@ -246,6 +246,7 @@ Note:
 - If no customization needed, you can omit the spec file (custom_spec.json)
 - `start_dateime` and `end_datetime` are copied to `start_timestamp` and `end_timestamp`.
 - `end_timestamp` and `end_datetime` are automatically set as UTC now if not present in the config file or command-line argument.
+- When inferring schema, you can also use `--sample_dir <directory>` option to read sample data from the file. The file must have the name sample_dir/stream_name.json and the format must match the raw response from the rest API.
 
 ### Step 5. Run the tap
 
