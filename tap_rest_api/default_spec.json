@@ -20,6 +20,12 @@
             "default": "./catalog",
             "help": "Path to the catalog directory"
         },
+        "sample_dir":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Path to the sample directory when inferring schema"
+        },
 
         "url":
         {

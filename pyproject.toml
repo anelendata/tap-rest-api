@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tap-rest-api"
+version = "0.2.11"
+description = "Singer.io tap for extracting data from any REST API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+
+authors = [
+  { name = "Daigo Tanaka" }
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
+]
+
+dependencies = [
+    "attrs==25.3.0",
+    "backoff>=1.8.0",
+    "getschema>=0.2.11",
+    "jsonschema>=2.6.0,<3.dev0",
+    "python-dateutil==2.9.0.post0",
+    "requests==2.32.5",
+    "simplejson==3.13.2",
+    "singer-python==6.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/anelendata/tap-rest-api"
+
+[project.scripts]
+tap-rest-api = "tap_rest_api:main.main"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tap_rest_api*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[dependency-groups]
+dev = [
+    "build>=1.3.0",
+    "pytest",
+]

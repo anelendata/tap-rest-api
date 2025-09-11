@@ -1,5 +1,5 @@
 import datetime, os, tempfile
-from tap_rest_api import sync
+from tap_rest_api.sync import sync
 from tap_rest_api.schema import infer_schema
 from tap_rest_api.helper import Stream
 from singer import utils
@@ -32,4 +32,4 @@ def test_infer_schema():
 def test_sync():
     config, catalog, streams = _prep_config()
     state = {}
-    sync(config, streams, state, catalog, auth_method="no_auth")
+    sync(config, streams, state, catalog)

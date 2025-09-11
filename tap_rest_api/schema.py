@@ -78,36 +78,46 @@ def discover(config, streams):
     json.dump(json_str, sys.stdout, indent=2)
 
 
+def _read_from_file(sample_dir, stream_id):
+    with open(os.path.join(sample_dir, stream_id + ".json"), 'r') as file:
+        return json.load(file)
+
+
 def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
     """
     Infer schema from the sample record list and write JSON schema and
     catalog files under schema directory and catalog directory.
     """
     max_page = config.get("max_page")
+    sample_dir = config.get("sample_dir")
 
     schemas = {}
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id
-
+        LOGGER.info(f"Processing {tap_stream_id}...")
         params = get_init_endpoint_params(config, {}, tap_stream_id)
 
         url = config.get("urls", {}).get(tap_stream_id, config["url"])
         auth_method = config.get("auth_method", "basic")
         headers = get_http_headers(config)
         records = []
-        page_number = 0
-        offset_number = 0
+        page_number = params.get("page_start", 0)
+        offset_number = params.get("offset_start", 0)
         while True:
             params.update({"current_page": page_number})
             params.update({"current_page_one_base": page_number + 1})
             params.update({"current_offset": offset_number})
 
-            endpoint = get_endpoint(url, tap_stream_id, params)
-            LOGGER.info("GET %s", endpoint)
-            data = generate_request(tap_stream_id, endpoint, auth_method,
-                                    headers,
-                                    config.get("username"),
-                                    config.get("password"))
+            if sample_dir:
+                LOGGER.info("Reading the data from file")
+                data = _read_from_file(sample_dir, tap_stream_id)
+            else:
+                endpoint = get_endpoint(url, tap_stream_id, params)
+                LOGGER.info("GET %s", endpoint)
+                data = generate_request(tap_stream_id, endpoint, auth_method,
+                                        headers,
+                                        config.get("username"),
+                                        config.get("password"))
 
             # In case the record is not at the root level
             record_list_level = config.get("record_list_level")
