@@ -52,7 +52,14 @@ class Schema(object):
         return cleaned
 
     @staticmethod
-    def safe_update(old_schema, new_schema):
+    def safe_update(old_schema, new_schema, lock_obj=True):
+        """
+        lock_obj: When true, the sub-item will not be modified recursively.
+        """
+        lock_at = None
+        if lock_obj:
+            lock_at = 1
+
         def get(d, path):
             cur = d
             for key in path:
@@ -83,17 +90,27 @@ class Schema(object):
             LOGGER.debug("updated " + ".".join(path))
             par[path[-1]] = value
 
-        def get_all_paths(d, path=[]):
+        def get_all_paths(d, path=[], level=None):
             for key, value in d.items():
+                LOGGER.debug(f"key {key} level {len(path)}/{level}")
                 if not isinstance(value, dict):
                     yield path + [key]
                     continue
-                yield from get_all_paths(value, path + [key])
-            
+                if level is None:
+                    yield from get_all_paths(value, path=path + [key], level=None)
+                    continue
+                if len(path) == level:
+                    yield path + [key]
+                    continue
+                elif len(path) < level:
+                    yield from get_all_paths(value, path=path + [key], level=level)
         
         safe_schema = dict(new_schema)
-        new_paths = list(get_all_paths(safe_schema))
-        old_paths = list(get_all_paths(old_schema))
+        new_paths = list(get_all_paths(safe_schema, level=1))
+        old_paths = list(get_all_paths(old_schema, level=1))
+
+        # for path in new_paths:
+        #     LOGGER.debug(".".join(path))
 
         for path in new_paths:
             if path not in old_paths:
