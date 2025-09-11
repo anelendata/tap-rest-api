@@ -1,6 +1,9 @@
-import dateutil, os, sys
+import dateutil
+import os
+import sys
 import simplejson as json
 import singer
+
 from singer import utils
 
 from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
@@ -12,94 +15,138 @@ import jsonschema
 LOGGER = singer.get_logger()
 
 
-def validate(record, schema):
-    try:
-        jsonschema.validate(record, schema)
-    except jsonschema.exceptions.ValidationError:
-        return False
-    return True
+class Schema(object):
+    config = None
 
+    def __init__(self, config):
+        self.config = config
 
-def filter_record(
-    row,
-    schema,
-    on_invalid_property="force",
-    drop_unknown_properties=False):
-    """
-    Parse the result into types
-    """
-    try:
-        cleaned = getschema.fix_type(
-            row,
-            schema,
-            on_invalid_property=on_invalid_property,
-            drop_unknown_properties=drop_unknown_properties,
-            date_to_datetime=True,
-        )
-    except Exception as e:
-        LOGGER.debug(row)
-        raise e
-    return cleaned
+    @staticmethod
+    def validate(record, schema):
+        try:
+            jsonschema.validate(record, schema)
+        except jsonschema.exceptions.ValidationError:
+            return False
+        return True
 
+    @staticmethod
+    def filter_record(
+        row,
+        schema,
+        on_invalid_property="force",
+        drop_unknown_properties=False):
+        """
+        Parse the result into types
+        """
+        try:
+            cleaned = getschema.fix_type(
+                row,
+                schema,
+                on_invalid_property=on_invalid_property,
+                drop_unknown_properties=drop_unknown_properties,
+                date_to_datetime=True,
+            )
+        except Exception as e:
+            LOGGER.debug(row)
+            raise e
+        return cleaned
 
-def load_schema(schema_dir, entity):
-    '''Returns the schema for the specified source'''
-    schema = utils.load_json(os.path.join(schema_dir, "{}.json".format(entity)))
-    return schema
+    @staticmethod
+    def safe_update(old_schema, new_schema):
+        def get(d, path):
+            cur = d
+            for key in path:
+                cur  = cur.get(key)
+                if not isinstance(cur, dict):
+                    return cur
+            return cur
 
+        def update(d, path, value, force=False):
+            cur = d
+            par = None
+            level = 0
+            for key in path:
+                level += 1
+                if not isinstance(cur, dict):
+                    raise Exception(".".join(path[0:level - 1]) + " is not a dict.")
+                if not cur.get(key):
+                    if level == len(path):  # leaf
+                        cur[key] = value
+                        # LOGGER.debug("added " + ".".join(path))
+                        return
+                    # Not a leaf, add a dict
+                    cur[key] = dict()
+                if force and not isinstance(cur[key], dict):
+                    cur[key] = dict()
+                par = cur
+                cur = cur[key]
+            LOGGER.debug("updated " + ".".join(path))
+            par[path[-1]] = value
 
-def load_discovered_schema(schema_dir, stream):
-    '''Attach inclusion automatic to each schema'''
-    schema = load_schema(schema_dir, stream.tap_stream_id)
-    for k in schema['properties']:
-        schema['properties'][k]['inclusion'] = 'automatic'
-    return schema
+        def get_all_paths(d, path=[]):
+            for key, value in d.items():
+                if not isinstance(value, dict):
+                    yield path + [key]
+                    continue
+                yield from get_all_paths(value, path + [key])
+            
+        
+        safe_schema = dict(new_schema)
+        new_paths = list(get_all_paths(safe_schema))
+        old_paths = list(get_all_paths(old_schema))
 
+        for path in new_paths:
+            if path not in old_paths:
+                continue
+            o = get(old_schema, path)
+            n = get(new_schema, path)
+            if o != n:
+                LOGGER.warning("Found a modified entry, but not changing at " + ".".join(path))
+                update(safe_schema, path, get(old_schema, path), force=True)
 
-def _discover_schemas(schema_dir, streams):
-    '''Iterate through streams, push to an array and return'''
-    result = {'streams': []}
-    for key in streams.keys():
-        stream = streams[key]
-        LOGGER.info('Loading schema for %s', stream.tap_stream_id)
-        result['streams'].append({'stream': stream.tap_stream_id,
-                                  'tap_stream_id': stream.tap_stream_id,
-                                  'schema': load_discovered_schema(schema_dir,
-                                                                   stream)})
-    return result
+        for path in old_paths:
+            if path not in new_paths:
+                LOGGER.warning("Found a deleted entry, but not changing at " + ".".join(path))
+                update(safe_schema, path, get(old_schema, path), force=True)
 
+        return safe_schema
 
-def discover(config, streams):
-    """
-    JSON dump the schemas to stdout
-    """
-    LOGGER.info("Loading Schemas")
-    json_str = _discover_schemas(config["schema_dir"], streams)
-    json.dump(json_str, sys.stdout, indent=2)
+    def load_schema(self, stream_id):
+        schema_dir = self.config["schema_dir"]
+        '''Returns the schema for the specified source'''
+        schema = utils.load_json(os.path.join(schema_dir, stream_id + ".json"))
+        return schema
 
+    def load_discovered_schema(self, stream):
+        '''Attach inclusion automatic to each schema'''
+        schema_dir = self.config["schema_dir"]
+        schema = self.load_schema(stream.tap_stream_id)
+        for k in schema['properties']:
+            schema['properties'][k]['inclusion'] = 'automatic'
+        return schema
 
-def _read_from_file(sample_dir, stream_id):
-    with open(os.path.join(sample_dir, stream_id + ".json"), 'r') as file:
-        return json.load(file)
+    def discover_schemas(self, streams):
+        '''Iterate through streams, push to an array and return'''
+        schema_dir = self.config["schema_dir"]
+        result = {'streams': []}
+        for key in streams.keys():
+            stream = streams[key]
+            LOGGER.info('Loading schema for %s', stream.tap_stream_id)
+            result['streams'].append({'stream': stream.tap_stream_id,
+                                    'tap_stream_id': stream.tap_stream_id,
+                                    'schema': self.load_discovered_schema(stream)})
+        return result
 
+    def infer_schema(self, stream_id):
+        max_page = self.config.get("max_page")
+        sample_dir = self.config.get("sample_dir")
 
-def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
-    """
-    Infer schema from the sample record list and write JSON schema and
-    catalog files under schema directory and catalog directory.
-    """
-    max_page = config.get("max_page")
-    sample_dir = config.get("sample_dir")
+        params = get_init_endpoint_params(self.config, {}, stream_id)
 
-    schemas = {}
-    for stream in list(streams.keys()):
-        tap_stream_id = streams[stream].tap_stream_id
-        LOGGER.info(f"Processing {tap_stream_id}...")
-        params = get_init_endpoint_params(config, {}, tap_stream_id)
+        url = self.config.get("urls", {}).get(stream_id, config["url"])
+        auth_method = self.config.get("auth_method", "basic")
+        headers = get_http_headers(self.config)
 
-        url = config.get("urls", {}).get(tap_stream_id, config["url"])
-        auth_method = config.get("auth_method", "basic")
-        headers = get_http_headers(config)
         records = []
         page_number = params.get("page_start", 0)
         offset_number = params.get("offset_start", 0)
@@ -110,11 +157,12 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
 
             if sample_dir:
                 LOGGER.info("Reading the data from file")
-                data = _read_from_file(sample_dir, tap_stream_id)
+                with open(os.path.join(sample_dir, stream_id + ".json"), 'r') as file:
+                    data = json.load(file)
             else:
-                endpoint = get_endpoint(url, tap_stream_id, params)
+                endpoint = get_endpoint(url, stream_id, params)
                 LOGGER.info("GET %s", endpoint)
-                data = generate_request(tap_stream_id, endpoint, auth_method,
+                data = generate_request(stream_id, endpoint, auth_method,
                                         headers,
                                         config.get("username"),
                                         config.get("password"))
@@ -128,7 +176,7 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
                 record_level = record_level.get(stream)
             data = get_record_list(data, record_list_level)
 
-            unnest_cols = config.get("unnest", {}).get(tap_stream_id, [])
+            unnest_cols = config.get("unnest", {}).get(stream_id, [])
             if unnest_cols:
                 for i in range(0, len(data)):
                     for u in unnest_cols:
@@ -137,9 +185,11 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
             records += data
 
             # Exit conditions
+            if sample_dir:
+                break
             if len(data) < config["items_per_page"]:
                 LOGGER.info(("Response is less than set item per page (%d)." +
-                             "Finishing the extraction") %
+                            "Finishing the extraction") %
                             config["items_per_page"])
                 break
             if max_page and page_number + 1 >= max_page:
@@ -152,19 +202,60 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
 
         schema = getschema.infer_schema(records, record_level)
 
+        return schema
+
+
+def discover(streams):
+    """
+    JSON dump the schemas to stdout
+    """
+    LOGGER.info("Loading Schemas")
+    schema = Schema(config)
+    json_str = schema.discover_schemas(streams)
+    json.dump(json_str, sys.stdout, indent=2)
+
+
+def infer_schema(
+    config,
+    streams,
+    out_catalog=True,
+    add_tstamp=True,
+    safe_update=True,
+    ):
+    """
+    Infer schema from the sample record list and write JSON schema and
+    catalog files under schema directory and catalog directory.
+
+    - safe_update: When schema_dir contains existing schema and safe_update = True, it will only modify the exiting schema with append manner.
+    """
+    schemas = {}
+    for stream in list(streams.keys()):
+        tap_stream_id = streams[stream].tap_stream_id
+        LOGGER.info(f"Processing {tap_stream_id}...")
+        schema = schema.infer_schema(tap_stream_id)
+
+        if not os.path.exists(config["schema_dir"]):
+            os.mkdir(config["schema_dir"])
+
         if add_tstamp:
             timestamp_format = {"type": ["null", "string"],
                                 "format": "date-time"}
             schema["properties"][EXTRACT_TIMESTAMP] = timestamp_format
             schema["properties"][BATCH_TIMESTAMP] = timestamp_format
 
-        if not os.path.exists(config["schema_dir"]):
-            os.mkdir(config["schema_dir"])
+        if safe_update and os.path.exists(os.path.join(config["schema_dir"], tap_stream_id + ".json")):
+            cur_schema = schema.load_schema(tap_stream_id)
+            safe_schema = schema.safe_update(cur_schema, schema)
+            schemas[tap_stream_id] = safe_schema
+        else:
+            schemas[tap_stream_id] = schema
 
-        schemas[tap_stream_id] = schema
+
+    for stream in list(streams.keys()):
+        tap_stream_id = streams[stream].tap_stream_id
         with open(os.path.join(config["schema_dir"], tap_stream_id + ".json"),
-                  "w") as f:
-            json.dump(schema, f, indent=2)
+                "w") as f:
+            json.dump(schemas[tap_stream_id], f, indent=2)
 
     if not out_catalog:
         return

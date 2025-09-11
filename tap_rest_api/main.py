@@ -210,7 +210,7 @@ def main():
         LOGGER.debug("State read: %s" % STATE)
 
     if args.infer_schema:
-        infer_schema(CONFIG, STREAMS)
+        infer_schema(CONFIG, STREAMS, safe_update=True)
     elif args.discover:
         discover(CONFIG, STREAMS)
     elif args.catalog:
