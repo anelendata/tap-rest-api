@@ -5,9 +5,9 @@
 python3 setup.py clean --all
 rm -fr dist
 rm -fr build
-rm -fr tap_bigquery.egg-info
-python3 setup.py sdist bdist_wheel
+rm -fr *.egg-info
 
-# test
-# python3 -m twine upload --repository testpypi dist/*
-twine upload dist/*
+uv build
+# python -m build
+
+uv publish
