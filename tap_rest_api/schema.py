@@ -101,8 +101,8 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
         auth_method = config.get("auth_method", "basic")
         headers = get_http_headers(config)
         records = []
-        page_number = 0
-        offset_number = 0
+        page_number = params.get("page_start", 0)
+        offset_number = params.get("offset_start", 0)
         while True:
             params.update({"current_page": page_number})
             params.update({"current_page_one_base": page_number + 1})
@@ -112,8 +112,8 @@ def infer_schema(config, streams, out_catalog=True, add_tstamp=True):
                 LOGGER.info("Reading the data from file")
                 data = _read_from_file(sample_dir, tap_stream_id)
             else:
-                LOGGER.info("GET %s", endpoint)
                 endpoint = get_endpoint(url, tap_stream_id, params)
+                LOGGER.info("GET %s", endpoint)
                 data = generate_request(tap_stream_id, endpoint, auth_method,
                                         headers,
                                         config.get("username"),
