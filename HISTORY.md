@@ -1,6 +1,7 @@
 ## History
 
 ### 0.2.12 (2025-09-10)
+Modernize the package with project.toml (#32)
 - feature: Option to read sample records from the files instead of API to infer schema
 - fix: infer_schema not picking up offset_start and page_start from the config
 
