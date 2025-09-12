@@ -112,19 +112,24 @@ class Schema(object):
         # for path in new_paths:
         #     LOGGER.debug(".".join(path))
 
+        added = 0
         for path in new_paths:
             if path not in old_paths:
+                added += 1
                 continue
             o = get(old_schema, path)
             n = get(new_schema, path)
             if o != n:
-                LOGGER.warning("Found a modified entry, but not changing at " + ".".join(path))
+                LOGGER.warning(" Found a modified entry, but not changing at " + ".".join(path))
                 update(safe_schema, path, get(old_schema, path), force=True)
 
         for path in old_paths:
             if path not in new_paths:
-                LOGGER.warning("Found a deleted entry, but not changing at " + ".".join(path))
+                LOGGER.warning(" Found a deleted entry, but not changing at " + ".".join(path))
                 update(safe_schema, path, get(old_schema, path), force=True)
+
+        if (added == 0):
+            LOGGER.warning(" No new field has been added.")
 
         return safe_schema
 
@@ -160,7 +165,7 @@ class Schema(object):
 
         params = get_init_endpoint_params(self.config, {}, stream_id)
 
-        url = self.config.get("urls", {}).get(stream_id, config["url"])
+        url = self.config.get("urls", {}).get(stream_id, self.config["url"])
         auth_method = self.config.get("auth_method", "basic")
         headers = get_http_headers(self.config)
 
@@ -181,22 +186,23 @@ class Schema(object):
                 LOGGER.info("GET %s", endpoint)
                 data = generate_request(stream_id, endpoint, auth_method,
                                         headers,
-                                        config.get("username"),
-                                        config.get("password"))
+                                        self.config.get("username"),
+                                        self.config.get("password"))
 
             # In case the record is not at the root level
-            record_list_level = config.get("record_list_level")
+            record_list_level = self.config.get("record_list_level")
             if isinstance(record_list_level, dict):
                 record_list_level = record_list_level.get(stream)
-            record_level = config.get("record_level")
+            record_level = self.config.get("record_level")
             if isinstance(record_level, dict):
                 record_level = record_level.get(stream)
             data = get_record_list(data, record_list_level)
 
-            unnest_cols = config.get("unnest", {}).get(stream_id, [])
+            unnest_cols = self.config.get("unnest", {}).get(stream_id, [])
             if unnest_cols:
                 for i in range(0, len(data)):
                     for u in unnest_cols:
+                        LOGGER.info(f"Unnesting {u['path']} to {u['target']}")
                         data[i] = unnest(data[i], u["path"], u["target"])
 
             records += data
@@ -204,10 +210,10 @@ class Schema(object):
             # Exit conditions
             if sample_dir:
                 break
-            if len(data) < config["items_per_page"]:
+            if len(data) < self.config["items_per_page"]:
                 LOGGER.info(("Response is less than set item per page (%d)." +
                             "Finishing the extraction") %
-                            config["items_per_page"])
+                            self.config["items_per_page"])
                 break
             if max_page and page_number + 1 >= max_page:
                 LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
@@ -222,13 +228,13 @@ class Schema(object):
         return schema
 
 
-def discover(streams):
+def discover(config, streams):
     """
     JSON dump the schemas to stdout
     """
     LOGGER.info("Loading Schemas")
-    schema = Schema(config)
-    json_str = schema.discover_schemas(streams)
+    schema_service = Schema(config)
+    json_str = schema_service.discover_schemas(streams)
     json.dump(json_str, sys.stdout, indent=2)
 
 
@@ -245,11 +251,12 @@ def infer_schema(
 
     - safe_update: When schema_dir contains existing schema and safe_update = True, it will only modify the exiting schema with append manner.
     """
+    schema_service = Schema(config)
     schemas = {}
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id
         LOGGER.info(f"Processing {tap_stream_id}...")
-        schema = schema.infer_schema(tap_stream_id)
+        schema = schema_service.infer_schema(tap_stream_id)
 
         if not os.path.exists(config["schema_dir"]):
             os.mkdir(config["schema_dir"])
@@ -261,8 +268,8 @@ def infer_schema(
             schema["properties"][BATCH_TIMESTAMP] = timestamp_format
 
         if safe_update and os.path.exists(os.path.join(config["schema_dir"], tap_stream_id + ".json")):
-            cur_schema = schema.load_schema(tap_stream_id)
-            safe_schema = schema.safe_update(cur_schema, schema)
+            cur_schema = schema_service.load_schema(tap_stream_id)
+            safe_schema = schema_service.safe_update(cur_schema, schema)
             schemas[tap_stream_id] = safe_schema
         else:
             schemas[tap_stream_id] = schema

@@ -23,7 +23,7 @@ from .helper import (
     unnest,
     EXTRACT_TIMESTAMP,
 )
-from .schema import filter_record, load_schema, validate
+from .schema import Schema
 
 
 LOGGER = singer.get_logger()
@@ -39,7 +39,8 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                      so it is safe to finish the replication once the last
                      update index/timestamp/datetime passes the end.
     """
-    schema = load_schema(config["schema_dir"], tap_stream_id)
+    schema_service = Schema(config)
+    schema = schema_service.load_schema(tap_stream_id)
     params = get_init_endpoint_params(config, state, tap_stream_id)
 
     dt_keys = config.get("datetime_keys")
@@ -145,14 +146,14 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
                     record = unnest(record, u["path"], u["target"])
 
                 if filter_by_schema:
-                    record = filter_record(
+                    record = Schema.filter_record(
                             record,
                             schema,
                             on_invalid_property=on_invalid_property,
                             drop_unknown_properties=drop_unknown_properties,
                             )
 
-                if not validate(record, schema):
+                if not Schema.validate(record, schema):
                     LOGGER.debug("Skipping the schema invalidated row %s" % record)
                     continue
 
