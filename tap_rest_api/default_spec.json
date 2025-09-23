@@ -228,6 +228,13 @@
             "type": "boolean",
             "default": false,
             "help": "If true, record will exclude unknown (sub-)properties before it's being written to stdout. Default is false."
+        },
+
+        "safe_schema_update":
+        {
+            "type": "boolean",
+            "default": true,
+            "help": "When schema_dir contains existing schema and safe_update = true, it will only modify the exiting schema with append manner."
         }
     }
 }
