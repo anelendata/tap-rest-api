@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.13 (2025-09-23)
+- feature: Safely update schema with infer_schema run when the schema exists under schema_dir.
+- Refactor schema.py with class
+
 ### 0.2.12 (2025-09-10)
 Modernize the package with project.toml (#32)
 - feature: Option to read sample records from the files instead of API to infer schema
