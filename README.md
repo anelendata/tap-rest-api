@@ -239,7 +239,8 @@ Note: The schema and catalog must reflect the schema after unnesting. To aid thi
 $ tap-rest-api custom_spec.json --config config/tap_config.json --schema_dir ./schema --catalog_dir ./catalog --start_datetime="2020-08-06" --infer_schema
 ```
 
-The schema and catalog files are created under schema and catalog directories, respectively.
+The schema and catalog files are created under schema and catalog directories, respectively. By default --safe-schema-update=true, meaning that infer_schema modifies the exiting schema with append manner and does not overwrite the data types or sub-items in the struct of the existing fields. To overwrite everything, either remove the existing schema JSON files under the directory specified by --schema_dir or set --safe_schema_update=false.
+
 
 Note:
 

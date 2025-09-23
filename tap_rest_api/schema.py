@@ -106,8 +106,8 @@ class Schema(object):
                     yield from get_all_paths(value, path=path + [key], level=level)
         
         safe_schema = dict(new_schema)
-        new_paths = list(get_all_paths(safe_schema, level=1))
-        old_paths = list(get_all_paths(old_schema, level=1))
+        new_paths = list(get_all_paths(safe_schema, level=lock_at))
+        old_paths = list(get_all_paths(old_schema, level=lock_at))
 
         # for path in new_paths:
         #     LOGGER.debug(".".join(path))
@@ -119,7 +119,11 @@ class Schema(object):
                 continue
             o = get(old_schema, path)
             n = get(new_schema, path)
-            if o != n:
+            if (
+                (not isinstance(o, dict) and o != n) or
+                (isinstance(o, dict) and o.get("type") != "object" and o!= n) or
+                (isinstance(o, dict) and o.get("type") == "object" and o!= n and lock_obj)
+            ):
                 LOGGER.warning(" Found a modified entry, but not changing at " + ".".join(path))
                 update(safe_schema, path, get(old_schema, path), force=True)
 

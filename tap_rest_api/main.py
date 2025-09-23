@@ -209,8 +209,10 @@ def main():
         STATE.update(args.state)
         LOGGER.debug("State read: %s" % STATE)
 
+    safe_schema_update = args.safe_schema_update
+
     if args.infer_schema:
-        infer_schema(CONFIG, STREAMS, safe_update=True)
+        infer_schema(CONFIG, STREAMS, safe_update=safe_schema_update)
     elif args.discover:
         discover(CONFIG, STREAMS)
     elif args.catalog:
