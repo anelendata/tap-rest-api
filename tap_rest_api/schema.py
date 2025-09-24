@@ -196,13 +196,18 @@ class Schema(object):
             # In case the record is not at the root level
             record_list_level = self.config.get("record_list_level")
             if isinstance(record_list_level, dict):
-                record_list_level = record_list_level.get(stream)
+                record_list_level = record_list_level.get(stream_id)
             record_level = self.config.get("record_level")
             if isinstance(record_level, dict):
-                record_level = record_level.get(stream)
+                record_level = record_level.get(stream_id)
             data = get_record_list(data, record_list_level)
 
-            unnest_cols = self.config.get("unnest", {}).get(stream_id, [])
+            unnest = self.config.get("unnest", {})
+            # Why self.config.get("unnest", {}) is returning NoneType instead of {}???
+            if unnest is None:
+                unnest = {}
+            unnest_cols = unnest.get(stream_id, [])
+
             if unnest_cols:
                 for i in range(0, len(data)):
                     for u in unnest_cols:
@@ -257,6 +262,7 @@ def infer_schema(
     """
     schema_service = Schema(config)
     schemas = {}
+    LOGGER.info(f"Safe schema update (append mode) is {safe_update}.")
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id
         LOGGER.info(f"Processing {tap_stream_id}...")
