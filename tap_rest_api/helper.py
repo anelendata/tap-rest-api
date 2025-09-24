@@ -107,6 +107,10 @@ def get_bookmark_type_and_key(config, stream):
     dt_keys = config.get("datetime_keys")
     i_keys = config.get("index_keys")
 
+    assert(dt_key is None or isinstance(dt_key, str), "config.datetime_key must be a string")
+    assert(ts_key is None or isinstance(ts_key, str), "config.timestamp_key must be a string")
+    assert(i_key is None or isinstance(i_key, str), "config.index_key must be a string")
+
     if isinstance(ts_keys, dict) and ts_keys.get(stream):
         return "timestamp", ts_keys.get(stream)
     if isinstance(dt_keys, dict) and dt_keys.get(stream):
@@ -253,9 +257,10 @@ def get_last_update(config, tap_stream_id, record, current):
         else:
             KeyError("timestamp_key not found in the record")
     elif bookmark_type == "datetime":
-        value = _get_jsonpath(record, bookmark_key)[0]
-        if not value:
-            KeyError("datetime_key not found in the record")
+        try:
+            value = _get_jsonpath(record, bookmark_key)[0]
+        except Exception as e:
+            raise KeyError(f"datetime_key {bookmark_key} not found in the record: {record}")
 
         record_datetime = parse_datetime_tz(value)
         current_datetime = parse_datetime_tz(current)

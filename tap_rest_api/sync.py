@@ -141,7 +141,11 @@ def sync_rows(config, state, tap_stream_id, key_properties=[], auth_method=None,
             for row in rows:
                 record = get_record(row, record_level)
 
-                unnest_cols = config.get("unnest", {}).get(tap_stream_id, [])
+                unnest = config.get("unnest", {})
+                # Why self.config.get("unnest", {}) is returning NoneType instead of {}???
+                if unnest is None:
+                    unnest = {}
+                unnest_cols = unnest.get(tap_stream_id, [])
                 for u in unnest_cols:
                     record = unnest(record, u["path"], u["target"])
 
