@@ -1,5 +1,10 @@
 ## History
 
+### 0.2.14 (2025-10-22)
+- fix stream_id bug in infer_schema
+- fix: config unnest and bookmark key type check
+- improve safe scheme update log
+
 ### 0.2.13 (2025-09-23)
 - feature: Safely update schema with infer_schema run when the schema exists under schema_dir.
 - Refactor schema.py with class
