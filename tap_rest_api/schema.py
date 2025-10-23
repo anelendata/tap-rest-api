@@ -121,10 +121,17 @@ class Schema(object):
             n = get(new_schema, path)
             if (
                 (not isinstance(o, dict) and o != n) or
-                (isinstance(o, dict) and o.get("type") != "object" and o!= n) or
-                (isinstance(o, dict) and o.get("type") == "object" and o!= n and lock_obj)
+                (isinstance(o, dict) and o.get("type") != "object" and o!= n)
             ):
-                LOGGER.warning(" Found a modified entry, but not changing at " + ".".join(path))
+                LOGGER.warning(" Found a modified entry, but not changing at " + ".".join(path) +
+                f"\n  Old type: {o}" +
+                f"\n  New type: {n}" + "\n")
+                update(safe_schema, path, get(old_schema, path), force=True)
+
+            if (isinstance(o, dict) and o.get("type") == "object" and o!= n and lock_obj):
+                LOGGER.warning(" Found a modified struct, but not changing at " + ".".join(path) +
+                "\n  Old keys: " + ", ".join(list(o.get("properties", {}).keys())) +
+                "\n  New keys: " + ", ".join(list(n.get("properties", {}).keys())) + "\n")
                 update(safe_schema, path, get(old_schema, path), force=True)
 
         for path in old_paths:
@@ -220,9 +227,9 @@ class Schema(object):
             if sample_dir:
                 break
             if len(data) < self.config["items_per_page"]:
-                LOGGER.info(("Response is less than set item per page (%d)." +
-                            "Finishing the extraction") %
-                            self.config["items_per_page"])
+                LOGGER.info(
+                    f"Response is less than set item per page ({len(data)}/{self.config['items_per_page']}). Finishing the extraction"
+                )
                 break
             if max_page and page_number + 1 >= max_page:
                 LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
@@ -231,6 +238,9 @@ class Schema(object):
             page_number +=1
             offset_number += len(data)
 
+
+        with open("artifacts/records.json", "w") as f:
+            json.dump(records, f, indent=2)
 
         schema = getschema.infer_schema(records, record_level)
 
