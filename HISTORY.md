@@ -1,5 +1,8 @@
 ## History
 
+### 0.2.15 (2025-10-27)
+- feature: safe exit after global timeout
+
 ### 0.2.14 (2025-10-22)
 - fix stream_id bug in infer_schema
 - fix: config unnest and bookmark key type check
