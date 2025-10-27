@@ -185,6 +185,12 @@
             "default": true,
             "help": "If true, trust the source data to be presorted by the index/timestamp/datetime keys. So it is safe to finish the replication once the last update index/timestamp/datetime passes the end."
         },
+        "global_timeout":
+        {
+            "type": "integer",
+            "default": null,
+            "help": "If set, stop the sync after global_timeout seconds."
+        },
         "max_page":
         {
             "type": "integer",

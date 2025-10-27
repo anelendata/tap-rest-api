@@ -6,9 +6,12 @@ import singer
 
 from singer import utils
 
-from .helper import (generate_request, get_endpoint, get_init_endpoint_params,
-                     get_record, get_record_list, get_http_headers, unnest,
-                     EXTRACT_TIMESTAMP, BATCH_TIMESTAMP)
+from .helper import (
+    get_streams, generate_request, get_endpoint, get_init_endpoint_params,
+    get_record, get_record_list, get_http_headers, unnest,
+    EXTRACT_TIMESTAMP, BATCH_TIMESTAMP,
+)
+
 import getschema
 import jsonschema
 
@@ -209,11 +212,11 @@ class Schema(object):
                 record_level = record_level.get(stream_id)
             data = get_record_list(data, record_list_level)
 
-            unnest = self.config.get("unnest", {})
+            unnest_config = self.config.get("unnest", {})
             # Why self.config.get("unnest", {}) is returning NoneType instead of {}???
-            if unnest is None:
-                unnest = {}
-            unnest_cols = unnest.get(stream_id, [])
+            if unnest_config is None:
+                unnest_config = {}
+            unnest_cols = unnest_config.get(stream_id, [])
 
             if unnest_cols:
                 for i in range(0, len(data)):
@@ -239,27 +242,31 @@ class Schema(object):
             offset_number += len(data)
 
 
-        with open("artifacts/records.json", "w") as f:
-            json.dump(records, f, indent=2)
+        if False:
+            with open("./records.json", "w") as f:
+                json.dump(records, f, indent=2)
+
+        if not records:
+            LOGGER.warning(f"No records found for {stream_id}")
+            return None
 
         schema = getschema.infer_schema(records, record_level)
-
         return schema
 
 
-def discover(config, streams):
+def discover(config):
     """
     JSON dump the schemas to stdout
     """
     LOGGER.info("Loading Schemas")
     schema_service = Schema(config)
+    streams = get_streams(config)
     json_str = schema_service.discover_schemas(streams)
     json.dump(json_str, sys.stdout, indent=2)
 
 
 def infer_schema(
     config,
-    streams,
     out_catalog=True,
     add_tstamp=True,
     safe_update=True,
@@ -270,13 +277,24 @@ def infer_schema(
 
     - safe_update: When schema_dir contains existing schema and safe_update = True, it will only modify the exiting schema with append manner.
     """
+    streams = get_streams(config)
     schema_service = Schema(config)
     schemas = {}
     LOGGER.info(f"Safe schema update (append mode) is {safe_update}.")
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id
+
+        cur_schema = None
+        if os.path.exists(os.path.join(config["schema_dir"], tap_stream_id + ".json")):
+            cur_schema = schema_service.load_schema(tap_stream_id)
+
         LOGGER.info(f"Processing {tap_stream_id}...")
         schema = schema_service.infer_schema(tap_stream_id)
+
+        if not schema:
+            LOGGER.warning(f"Schema could not be inferred for {stream}")
+            schemas[tap_stream_id] = cur_schema
+            continue
 
         if not os.path.exists(config["schema_dir"]):
             os.mkdir(config["schema_dir"])
@@ -287,8 +305,7 @@ def infer_schema(
             schema["properties"][EXTRACT_TIMESTAMP] = timestamp_format
             schema["properties"][BATCH_TIMESTAMP] = timestamp_format
 
-        if safe_update and os.path.exists(os.path.join(config["schema_dir"], tap_stream_id + ".json")):
-            cur_schema = schema_service.load_schema(tap_stream_id)
+        if safe_update:
             safe_schema = schema_service.safe_update(cur_schema, schema)
             schemas[tap_stream_id] = safe_schema
         else:
@@ -296,6 +313,9 @@ def infer_schema(
 
 
     for stream in list(streams.keys()):
+        if not schemas.get(stream):
+            continue
+
         tap_stream_id = streams[stream].tap_stream_id
         with open(os.path.join(config["schema_dir"], tap_stream_id + ".json"),
                 "w") as f:
@@ -307,7 +327,11 @@ def infer_schema(
     catalog = {"streams": []}
     for stream in list(streams.keys()):
         tap_stream_id = streams[stream].tap_stream_id
-        schema = schemas[tap_stream_id]
+
+        schema = schemas.get(tap_stream_id)
+        if not schema:
+            continue
+
         schema["selected"] = True
         catalog["streams"].append({
             "stream": tap_stream_id,

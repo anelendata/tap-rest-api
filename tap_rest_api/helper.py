@@ -32,6 +32,22 @@ class Stream(object):
     kwargs = attr.ib()
 
 
+def get_streams(config):
+    if config.get("streams"):
+        stream_names = config["streams"].split(",")
+    elif config.get("schema"):
+        stream_names = [config["schema"]]
+    else:
+        raise Exception("Config needs to specify streams or schema variable.")
+
+    streams = dict()
+    for stream in stream_names:
+        stream = stream.strip()
+        streams[stream] = Stream(stream, config)
+
+    return streams
+
+
 def get_abs_path(path):
     """Returns the absolute path"""
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)

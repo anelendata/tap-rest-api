@@ -172,9 +172,7 @@ def main():
         spec_file = sys.argv[1]
 
     args = parse_args(spec_file, REQUIRED_CONFIG_KEYS)
-
     CONFIG.update(args.config)
-
     # Overwrite config specs with commandline args
     # But we want to skip the args unspecified by the user...
     # So the trick is to go back to sys.argv and find the args begins with "--"
@@ -185,38 +183,23 @@ def main():
             continue
         CONFIG[arg] = args_dict[arg]
 
-    STATE = {}
-
     if args.loglevel:
         log_level = LOG_LEVELS.get(args.loglevel.upper())
         if not log_level:
             raise (f"Log level must be one of {','.join(LOG_LEVELS)}")
         LOGGER.setLevel(log_level)
 
-
-    if CONFIG.get("streams"):
-        streams = CONFIG["streams"].split(",")
-    elif CONFIG.get("schema"):
-        streams = [CONFIG["schema"]]
-    else:
-        raise Exception("Config needs to specify streams or schema variable.")
-
-    for stream in streams:
-        stream = stream.strip()
-        STREAMS[stream] = Stream(stream, CONFIG)
-
-    if args.state:
-        STATE.update(args.state)
-        LOGGER.debug("State read: %s" % STATE)
-
-    safe_schema_update = args.safe_schema_update
-
     if args.infer_schema:
-        infer_schema(CONFIG, STREAMS, safe_update=safe_schema_update)
+        safe_schema_update = args.safe_schema_update
+        infer_schema(CONFIG, safe_update=safe_schema_update)
     elif args.discover:
-        discover(CONFIG, STREAMS)
+        discover(CONFIG)
     elif args.catalog:
-        sync(CONFIG, STREAMS, STATE, args.catalog, raw=args.raw)
+        state = {}
+        if args.state:
+            state.update(args.state)
+            LOGGER.debug("State read: %s" % state)
+            sync(CONFIG, state, args.catalog, raw=args.raw)
     else:
         raise Exception("No streams were selected")
 
