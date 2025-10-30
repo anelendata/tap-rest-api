@@ -283,6 +283,8 @@ def get_last_update(config, tap_stream_id, record, current):
 
         if record_datetime > current_datetime:
             last_update = format_datetime(config, record_datetime)
+        else:
+            last_update = format_datetime(config, current_datetime)
     elif bookmark_type == "index":
         current_index = str(_get_jsonpath(record, bookmark_key)[0])
         LOGGER.debug("Last update will be updated from %s to %s" %

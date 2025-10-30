@@ -138,7 +138,7 @@
         {
             "type": "string",
             "default": "auto",
-            "help": "Timespec in ISO 8601 format"
+            "help": "Timespec in ISO 8601 format. auto, microseconds, milliseconds, etc"
         },
         "url_param_isoformat_use_zulu":
         {
