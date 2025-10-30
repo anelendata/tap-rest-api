@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tap-rest-api"
-version = "0.2.15"
+version = "0.2.16"
 description = "Singer.io tap for extracting data from any REST API"
 readme = "README.md"
 requires-python = ">=3.9"

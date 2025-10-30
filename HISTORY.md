@@ -1,5 +1,8 @@
 ## History
 
+### 0.2.16 (2025-10-30)
+- fix: ensure the correcte datetime format when the last record timestamp did not proceed
+
 ### 0.2.15 (2025-10-27)
 - feature: safe exit after global timeout
 
