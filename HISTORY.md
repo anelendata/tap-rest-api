@@ -1,5 +1,8 @@
 ## History
 
+### 0.2.17 (2026-03-30)
+- fix: Unblock other streams after one experiences an error
+
 ### 0.2.16 (2025-10-30)
 - fix: ensure the correcte datetime format when the last record timestamp did not proceed
 
