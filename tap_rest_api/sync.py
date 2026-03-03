@@ -142,10 +142,16 @@ class Sync(object):
                 endpoint = get_endpoint(url, tap_stream_id, params)
                 LOGGER.info("GET %s", endpoint)
 
-                rows = generate_request(tap_stream_id, endpoint, auth_method,
-                                        headers,
-                                        self.config.get("username"),
-                                        self.config.get("password"))
+                rows = []
+                try:
+                    rows = generate_request(tap_stream_id, endpoint, auth_method,
+                                            headers,
+                                            self.config.get("username"),
+                                            self.config.get("password"))
+                except Exception as e:
+                    if page_number == self.config.get("page_start", 0):
+                        raise
+                    LOGGER.error(f"Endpoint responded with an error: {str(e)}")
 
                 # In case the record is not at the root level
                 record_list_level = self.config.get("record_list_level")
@@ -156,10 +162,14 @@ class Sync(object):
                     record_level = record_level.get(tap_stream_id)
 
                 rows = get_record_list(rows, record_list_level)
+                if not isinstance(rows, list):
+                    rows = [rows]
 
                 LOGGER.info("Current page %d" % page_number)
                 LOGGER.info("Current offset %d" % offset_number)
 
+                LOGGER.debug("    Row process started.")
+                row_process_started_at = datetime.datetime.now()
                 for row in rows:
                     record = get_record(row, record_level)
 
@@ -223,6 +233,9 @@ class Sync(object):
                         record.pop(EXTRACT_TIMESTAMP)
                         digest = get_digest_from_record(record)
                         prev_written_record = {"digest": digest}
+
+                row_process_sec = datetime.datetime.now() - row_process_started_at
+                LOGGER.debug(f"    row process completed in {row_process_sec} seconds.")
 
                 # Exit conditions
                 if len(rows) < self.config["items_per_page"]:
