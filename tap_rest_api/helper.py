@@ -123,9 +123,9 @@ def get_bookmark_type_and_key(config, stream):
     dt_keys = config.get("datetime_keys")
     i_keys = config.get("index_keys")
 
-    assert(dt_key is None or isinstance(dt_key, str), "config.datetime_key must be a string")
-    assert(ts_key is None or isinstance(ts_key, str), "config.timestamp_key must be a string")
-    assert(i_key is None or isinstance(i_key, str), "config.index_key must be a string")
+    assert dt_key is None or isinstance(dt_key, str), "config.datetime_key must be a string"
+    assert ts_key is None or isinstance(ts_key, str), "config.timestamp_key must be a string"
+    assert i_key is None or isinstance(i_key, str), "config.index_key must be a string"
 
     if isinstance(ts_keys, dict) and ts_keys.get(stream):
         return "timestamp", ts_keys.get(stream)
@@ -237,11 +237,17 @@ def get_end(config, tap_stream_id):
                 end_from_config = dateutil.parser.parse(
                     config["end_datetime"]).timestamp()
             else:
-                end_from_config = datetime.datetime.now().timestamp()
+                # Bookmarks/records are UTC; use an explicit UTC "now" so the end
+                # bound does not skew on a non-UTC host.
+                end_from_config = datetime.datetime.now(
+                    datetime.timezone.utc).timestamp()
     elif bookmark_type == "datetime":
         end_from_config = config.get("end_datetime")
         if not end_from_config:
-            end_from_config = format_datetime(config, datetime.datetime.now())
+            # utcnow(), not now(): the datetime bookmark and the records it is
+            # compared against are UTC. Local now() would offset the upper bound
+            # by the host's timezone (e.g. gate out the last N hours of data).
+            end_from_config = format_datetime(config, datetime.datetime.utcnow())
     elif bookmark_type == "index":
         end_from_config = config.get("end_index")
     return end_from_config
@@ -364,6 +370,61 @@ def get_init_endpoint_params(config, state, tap_stream_id):
          }
     )
 
+    return params
+
+
+def iter_window_bounds(start_epoch, end_epoch, window_seconds):
+    """Yield contiguous, half-open [w_start, w_end) windows (in epoch seconds)
+    covering [start_epoch, end_epoch].
+
+    Windows are contiguous (each w_end is the next w_start) and the final window's
+    end is clamped to end_epoch, so the union is exactly [start_epoch, end_epoch]
+    with no gaps and no overlaps. Yields nothing when start_epoch >= end_epoch.
+    """
+    if not window_seconds or window_seconds <= 0:
+        raise ValueError("window_size must be a positive number of seconds")
+    w_start = float(start_epoch)
+    end_epoch = float(end_epoch)
+    while w_start < end_epoch:
+        w_end = min(w_start + window_seconds, end_epoch)
+        yield w_start, w_end
+        w_start = w_end
+
+
+def get_windowed_endpoint_params(config, tap_stream_id, w_start_epoch, w_end_epoch):
+    """Like get_init_endpoint_params, but for a single [w_start, w_end) window given
+    as epoch seconds. Windowing requires a time-ordered bookmark, so only datetime
+    and timestamp bookmark types are supported.
+    """
+    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
+    params = dict(config)
+    # utcfromtimestamp (not fromtimestamp): the window epochs are UTC, and the
+    # formatted bounds go into the URL filter and the per-record write-gate, both
+    # of which compare against UTC record timestamps. Local conversion would skew
+    # both on a non-UTC host.
+    start_datetime = format_datetime(config, datetime.datetime.utcfromtimestamp(w_start_epoch))
+    end_datetime = format_datetime(config, datetime.datetime.utcfromtimestamp(w_end_epoch))
+    params.update({
+        "start_timestamp": w_start_epoch,
+        "end_timestamp": w_end_epoch,
+        "start_datetime": start_datetime,
+        "end_datetime": end_datetime,
+        "start_date": start_datetime[0:10],
+        "end_date": end_datetime[0:10],
+    })
+    if bookmark_type == "timestamp":
+        params["timestamp_key"] = bookmark_key
+    elif bookmark_type == "datetime":
+        params["datetime_key"] = bookmark_key
+    else:
+        raise ValueError("window_size requires a datetime or timestamp bookmark")
+
+    params.update({
+        "stream": tap_stream_id,
+        "current_page": config.get("page_start", 0),
+        "current_offset": config.get("offset_start", 0),
+        "last_update": w_start_epoch if bookmark_type == "timestamp" else start_datetime,
+    })
     return params
 
 

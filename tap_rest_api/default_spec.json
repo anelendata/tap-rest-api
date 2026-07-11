@@ -191,6 +191,18 @@
             "default": null,
             "help": "If set, stop the sync after global_timeout seconds."
         },
+        "window_size_seconds":
+        {
+            "type": "integer",
+            "default": null,
+            "help": "If set (with a datetime/timestamp bookmark), replicate in contiguous half-open time windows of this size instead of one open-ended request. The bookmark is only advanced (checkpointed) after a window fully drains, so a timeout cannot leapfrog past unfetched records. Requires the URL to bound both ends of the bookmark field (e.g. ...__gte={start_datetime}&...__lt={end_datetime})."
+        },
+        "window_size_hours":
+        {
+            "type": "number",
+            "default": null,
+            "help": "Convenience alternative to window_size_seconds, expressed in hours."
+        },
         "max_page":
         {
             "type": "integer",
