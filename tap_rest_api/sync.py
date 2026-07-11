@@ -189,8 +189,9 @@ class Sync(object):
                                 drop_unknown_properties=drop_unknown_properties,
                                 )
 
-                    if not Schema.validate(record, schema):
-                        LOGGER.debug("Skipping the schema invalidated row %s" % record)
+                    valid, reason = Schema.validate(record, schema)
+                    if not valid:
+                        LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
                         continue
 
                     # It's important to compare the record before adding

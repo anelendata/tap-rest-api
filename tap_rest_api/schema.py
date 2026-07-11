@@ -28,9 +28,9 @@ class Schema(object):
     def validate(record, schema):
         try:
             jsonschema.validate(record, schema)
-        except jsonschema.exceptions.ValidationError:
-            return False
-        return True
+        except jsonschema.exceptions.ValidationError as e:
+            return False, str(e)
+        return True, None
 
     @staticmethod
     def filter_record(
