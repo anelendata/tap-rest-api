@@ -42,6 +42,7 @@ TYPES = {
     "string": str,
     "datetime": str,
     "integer": int,
+    "number": float,
     "boolean": str2bool
     }
 
