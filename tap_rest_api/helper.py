@@ -367,6 +367,57 @@ def get_init_endpoint_params(config, state, tap_stream_id):
     return params
 
 
+def iter_window_bounds(start_epoch, end_epoch, window_seconds):
+    """Yield contiguous, half-open [w_start, w_end) windows (in epoch seconds)
+    covering [start_epoch, end_epoch].
+
+    Windows are contiguous (each w_end is the next w_start) and the final window's
+    end is clamped to end_epoch, so the union is exactly [start_epoch, end_epoch]
+    with no gaps and no overlaps. Yields nothing when start_epoch >= end_epoch.
+    """
+    if not window_seconds or window_seconds <= 0:
+        raise ValueError("window_size must be a positive number of seconds")
+    w_start = float(start_epoch)
+    end_epoch = float(end_epoch)
+    while w_start < end_epoch:
+        w_end = min(w_start + window_seconds, end_epoch)
+        yield w_start, w_end
+        w_start = w_end
+
+
+def get_windowed_endpoint_params(config, tap_stream_id, w_start_epoch, w_end_epoch):
+    """Like get_init_endpoint_params, but for a single [w_start, w_end) window given
+    as epoch seconds. Windowing requires a time-ordered bookmark, so only datetime
+    and timestamp bookmark types are supported.
+    """
+    bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
+    params = dict(config)
+    start_datetime = format_datetime(config, datetime.datetime.fromtimestamp(w_start_epoch))
+    end_datetime = format_datetime(config, datetime.datetime.fromtimestamp(w_end_epoch))
+    params.update({
+        "start_timestamp": w_start_epoch,
+        "end_timestamp": w_end_epoch,
+        "start_datetime": start_datetime,
+        "end_datetime": end_datetime,
+        "start_date": start_datetime[0:10],
+        "end_date": end_datetime[0:10],
+    })
+    if bookmark_type == "timestamp":
+        params["timestamp_key"] = bookmark_key
+    elif bookmark_type == "datetime":
+        params["datetime_key"] = bookmark_key
+    else:
+        raise ValueError("window_size requires a datetime or timestamp bookmark")
+
+    params.update({
+        "stream": tap_stream_id,
+        "current_page": config.get("page_start", 0),
+        "current_offset": config.get("offset_start", 0),
+        "last_update": w_start_epoch if bookmark_type == "timestamp" else start_datetime,
+    })
+    return params
+
+
 def get_http_headers(config=None):
     if not config or not config.get("http_headers"):
         return {"User-Agent": USER_AGENT,

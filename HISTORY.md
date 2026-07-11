@@ -1,5 +1,12 @@
 ## History
 
+### 0.2.18 (2026-07-11)
+- feature: bounded, fully-drained time windows (`window_size_seconds`/`window_size_hours`).
+  With a datetime/timestamp bookmark, replicate in contiguous half-open windows and
+  checkpoint the bookmark only after a window fully drains, so a timeout cannot leapfrog
+  past unfetched records. Opt-in; unset keeps the existing single-request behavior.
+- fix: log schema-validation failures with the reason and the offending record.
+
 ### 0.2.17 (2026-03-30)
 - fix: Unblock other streams after one experiences an error
 

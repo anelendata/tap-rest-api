@@ -25,6 +25,10 @@ from .helper import (
     get_digest_from_record,
     unnest,
     EXTRACT_TIMESTAMP,
+    format_datetime,
+    parse_datetime_tz,
+    get_windowed_endpoint_params,
+    iter_window_bounds,
 )
 from .schema import Schema
 
@@ -121,158 +125,248 @@ class Sync(object):
         if last_record_extracted:
             prev_written_record = json.loads(last_record_extracted)
 
-        # First writ out the schema
+        # First write out the schema
         if raw_output is False:
             singer.write_schema(tap_stream_id, schema, key_properties)
 
+        window_seconds = self.config.get("window_size_seconds")
+        if not window_seconds and self.config.get("window_size_hours"):
+            window_seconds = float(self.config["window_size_hours"]) * 3600.0
+
         # Fetch and iterate over to write the records
         with metrics.record_counter(tap_stream_id) as counter:
-            while True:
-                if (self.started_at and global_timeout and
-                    datetime.datetime.now() - self.started_at >= datetime.timedelta(seconds=global_timeout)):
-                    LOGGER.warning(f"Timeout {global_timeout} reached. Not doing further sync.")
-                    break
+            if (window_seconds and bookmark_type in ("datetime", "timestamp")
+                    and start is not None and end is not None):
+                current_state = self._sync_windowed(
+                    current_state, tap_stream_id, schema, start, end, bookmark_type,
+                    window_seconds, prev_written_record, counter, raw_output)
+            else:
+                completed, last_update, prev_written_record = self._drain_pages(
+                    tap_stream_id, params, schema, end, last_update,
+                    prev_written_record, counter, raw_output)
+                # Not windowing: advance the bookmark to the max value seen (legacy behavior).
+                if bookmark_type == "timestamp" and len(str(int(last_update))) == 10:
+                    last_update = int(last_update * 1000)
+                current_state = singer.write_bookmark(
+                    current_state, tap_stream_id, "last_update", last_update)
+                if prev_written_record:
+                    current_state = singer.write_bookmark(
+                        current_state, tap_stream_id, "last_record_extracted",
+                        json.dumps(prev_written_record))
+                if raw_output is False:
+                    singer.write_state(current_state)
 
-                params.update({"current_page": page_number})
-                params.update({"current_page_one_base": page_number + 1})
-                params.update({"current_offset": offset_number})
-                params.update({"last_update": last_update})
+        return current_state
 
-                url = self.config.get("urls", {}).get(tap_stream_id, self.config["url"])
-                endpoint = get_endpoint(url, tap_stream_id, params)
-                LOGGER.info("GET %s", endpoint)
+    def _drain_pages(self, tap_stream_id, params, schema, end, last_update,
+                     prev_written_record, counter, raw_output):
+        """Paginate a single query (one window, or the whole range when not windowing)
+        to exhaustion, writing every record fetched.
 
-                rows = []
+        Returns (completed, last_update, prev_written_record). ``completed`` is True
+        only when the API signalled the natural end of data (a short/last page), or,
+        with assume_sorted, when the sort passed ``end``. It is False when the run was
+        cut short by global_timeout or max_page -- in which case the caller must NOT
+        advance the bookmark past records that were never fetched.
+        """
+        max_page = self.config.get("max_page")
+        global_timeout = self.config.get("global_timeout")
+        auth_method = self.config.get("auth_method", "basic")
+        assume_sorted = self.config.get("assume_sorted", True)
+        filter_by_schema = self.config.get("filter_by_schema", True)
+        on_invalid_property = self.config.get("on_invalid_property", "force")
+        drop_unknown_properties = self.config.get("drop_unknown_properties", False)
+        headers = get_http_headers(self.config)
+
+        page_number = params.get("current_page", 0)
+        offset_number = params.get("current_offset", 0)
+        next_last_update = None
+        completed = False
+
+        while True:
+            if (self.started_at and global_timeout and
+                datetime.datetime.now() - self.started_at >= datetime.timedelta(seconds=global_timeout)):
+                LOGGER.warning(f"Timeout {global_timeout} reached. Not doing further sync.")
+                break
+
+            params.update({"current_page": page_number})
+            params.update({"current_page_one_base": page_number + 1})
+            params.update({"current_offset": offset_number})
+            params.update({"last_update": last_update})
+
+            url = self.config.get("urls", {}).get(tap_stream_id, self.config["url"])
+            endpoint = get_endpoint(url, tap_stream_id, params)
+            LOGGER.info("GET %s", endpoint)
+
+            rows = []
+            try:
+                rows = generate_request(tap_stream_id, endpoint, auth_method,
+                                        headers,
+                                        self.config.get("username"),
+                                        self.config.get("password"))
+            except Exception as e:
+                if page_number == self.config.get("page_start", 0):
+                    raise
+                LOGGER.error(f"Endpoint responded with an error: {str(e)}")
+
+            # In case the record is not at the root level
+            record_list_level = self.config.get("record_list_level")
+            if isinstance(record_list_level, dict):
+                record_list_level = record_list_level.get(tap_stream_id)
+            record_level = self.config.get("record_level")
+            if isinstance(record_level, dict):
+                record_level = record_level.get(tap_stream_id)
+
+            rows = get_record_list(rows, record_list_level)
+            if not isinstance(rows, list):
+                rows = [rows]
+
+            LOGGER.info("Current page %d" % page_number)
+            LOGGER.info("Current offset %d" % offset_number)
+
+            LOGGER.debug("    Row process started.")
+            row_process_started_at = datetime.datetime.now()
+            for row in rows:
+                record = get_record(row, record_level)
+
+                unnest_config = self.config.get("unnest", {})
+                if unnest_config is None:
+                    unnest_config = {}
+                unnest_cols = unnest_config.get(tap_stream_id, [])
+                for u in unnest_cols:
+                    record = unnest(record, u["path"], u["target"])
+
+                if filter_by_schema:
+                    record = Schema.filter_record(
+                            record,
+                            schema,
+                            on_invalid_property=on_invalid_property,
+                            drop_unknown_properties=drop_unknown_properties,
+                            )
+
+                valid, reason = Schema.validate(record, schema)
+                if not valid:
+                    LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
+                    continue
+
+                # It's important to compare the record before adding EXTRACT_TIMESTAMP
+                digest = get_digest_from_record(record)
+                digest_dict = {"digest": digest}
+                if (prev_written_record == record or
+                        prev_written_record == digest_dict):
+                    LOGGER.info(
+                        "Skipping the duplicated row with "
+                        f"digest {digest}"
+                    )
+                    continue
+
+                if EXTRACT_TIMESTAMP in schema["properties"].keys():
+                    extract_tstamp = datetime.datetime.utcnow()
+                    extract_tstamp = extract_tstamp.replace(
+                        tzinfo=datetime.timezone.utc)
+                    record[EXTRACT_TIMESTAMP] = extract_tstamp.isoformat()
+
                 try:
-                    rows = generate_request(tap_stream_id, endpoint, auth_method,
-                                            headers,
-                                            self.config.get("username"),
-                                            self.config.get("password"))
+                    next_last_update = get_last_update(self.config, tap_stream_id, record, last_update)
                 except Exception as e:
-                    if page_number == self.config.get("page_start", 0):
-                        raise
-                    LOGGER.error(f"Endpoint responded with an error: {str(e)}")
+                    LOGGER.error(f"Error with the record:\n    {row}\n    message: {e}")
+                    raise
 
-                # In case the record is not at the root level
-                record_list_level = self.config.get("record_list_level")
-                if isinstance(record_list_level, dict):
-                    record_list_level = record_list_level.get(tap_stream_id)
-                record_level = self.config.get("record_level")
-                if isinstance(record_level, dict):
-                    record_level = record_level.get(tap_stream_id)
+                if not end or next_last_update < end:
+                    if raw_output:
+                        sys.stdout.write(json.dumps(record) + "\n")
+                    else:
+                        singer.write_record(tap_stream_id, record)
 
-                rows = get_record_list(rows, record_list_level)
-                if not isinstance(rows, list):
-                    rows = [rows]
+                    counter.increment()  # Increment only when we write
+                    last_update = next_last_update
 
-                LOGGER.info("Current page %d" % page_number)
-                LOGGER.info("Current offset %d" % offset_number)
-
-                LOGGER.debug("    Row process started.")
-                row_process_started_at = datetime.datetime.now()
-                for row in rows:
-                    record = get_record(row, record_level)
-
-                    unnest_config = self.config.get("unnest", {})
-                    # Why self.config.get("unnest", {}) is returning NoneType instead of {}???
-                    if unnest_config is None:
-                        unnest_config = {}
-                    unnest_cols = unnest_config.get(tap_stream_id, [])
-                    for u in unnest_cols:
-                        record = unnest(record, u["path"], u["target"])
-
-                    if filter_by_schema:
-                        record = Schema.filter_record(
-                                record,
-                                schema,
-                                on_invalid_property=on_invalid_property,
-                                drop_unknown_properties=drop_unknown_properties,
-                                )
-
-                    valid, reason = Schema.validate(record, schema)
-                    if not valid:
-                        LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
-                        continue
-
-                    # It's important to compare the record before adding
-                    # EXTRACT_TIMESTAMP
+                    # prev_written_record may be persisted for the next run.
+                    # EXTRACT_TIMESTAMP will be different. So popping it out before storing.
+                    record.pop(EXTRACT_TIMESTAMP)
                     digest = get_digest_from_record(record)
-                    digest_dict = {"digest": digest}
-                    # backward compatibility
-                    if (prev_written_record == record or
-                            prev_written_record == digest_dict):
-                        LOGGER.info(
-                            "Skipping the duplicated row with "
-                            f"digest {digest}"
-                        )
-                        continue
+                    prev_written_record = {"digest": digest}
 
-                    if EXTRACT_TIMESTAMP in schema["properties"].keys():
-                        extract_tstamp = datetime.datetime.utcnow()
-                        extract_tstamp = extract_tstamp.replace(
-                            tzinfo=datetime.timezone.utc)
-                        record[EXTRACT_TIMESTAMP] = extract_tstamp.isoformat()
+            row_process_sec = datetime.datetime.now() - row_process_started_at
+            LOGGER.debug(f"    row process completed in {row_process_sec} seconds.")
 
-                    try:
-                        next_last_update = get_last_update(self.config, tap_stream_id, record, last_update)
-                    except Exception as e:
-                        LOGGER.error(f"Error with the record:\n    {row}\n    message: {e}")
-                        raise
+            # Exit conditions
+            if len(rows) < self.config["items_per_page"]:
+                LOGGER.info(("Response is less than set item per page (%d)." +
+                            "Finishing the extraction") %
+                            self.config["items_per_page"])
+                completed = True
+                break
+            if max_page and page_number + 1 >= max_page:
+                LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
+                break
+            if assume_sorted and end and (next_last_update and next_last_update >= end):
+                LOGGER.info(("Record greater than %s and assume_sorted is" +
+                            " set. Finishing the extraction.") % end)
+                completed = True
+                break
 
-                    if not end or next_last_update < end:
-                        if raw_output:
-                            sys.stdout.write(json.dumps(record) + "\n")
-                        else:
-                            singer.write_record(tap_stream_id, record)
+            page_number += 1
+            offset_number += len(rows)
 
-                        counter.increment()  # Increment only when we write
-                        last_update = next_last_update
+        return completed, last_update, prev_written_record
 
-                        # prev_written_record may be persisted for the next run.
-                        # EXTRACT_TIMESTAMP will be different. So popping it out
-                        # before storing.
-                        record.pop(EXTRACT_TIMESTAMP)
-                        digest = get_digest_from_record(record)
-                        prev_written_record = {"digest": digest}
+    def _sync_windowed(self, current_state, tap_stream_id, schema, start, end,
+                       bookmark_type, window_seconds, prev_written_record,
+                       counter, raw_output):
+        """Replicate in contiguous, fully-drained time windows.
 
-                row_process_sec = datetime.datetime.now() - row_process_started_at
-                LOGGER.debug(f"    row process completed in {row_process_sec} seconds.")
+        The bookmark is checkpointed to a window's (exclusive) upper bound only after
+        that window is completely drained. A window cut short by a timeout leaves the
+        bookmark at the last completed boundary, so the next run resumes there -- no
+        leapfrog past unfetched records, no silent loss. Requires the URL to bound
+        both ends of the bookmark field, e.g.
+        ...__gte={start_datetime}&...__lt={end_datetime}.
+        """
+        if bookmark_type == "timestamp":
+            start_epoch = get_float_timestamp(start)
+            end_epoch = get_float_timestamp(end)
+        else:  # datetime
+            start_epoch = parse_datetime_tz(start).timestamp()
+            end_epoch = parse_datetime_tz(end).timestamp()
 
-                # Exit conditions
-                if len(rows) < self.config["items_per_page"]:
-                    LOGGER.info(("Response is less than set item per page (%d)." +
-                                "Finishing the extraction") %
-                                self.config["items_per_page"])
-                    break
-                if max_page and page_number + 1 >= max_page:
-                    LOGGER.info("Max page %d reached. Finishing the extraction." % max_page)
-                    break
-                if assume_sorted and end and (next_last_update and next_last_update >= end):
-                    LOGGER.info(("Record greater than %s and assume_sorted is" +
-                                " set. Finishing the extraction.") % end)
-                    break
+        for w_start, w_end in iter_window_bounds(start_epoch, end_epoch, window_seconds):
+            params = get_windowed_endpoint_params(self.config, tap_stream_id, w_start, w_end)
+            # Exclusive upper bound in the bookmark's native format, used both as the
+            # checkpoint value and as the per-record write-gate (keeps windows half-open
+            # even if the URL uses an inclusive __lte).
+            if bookmark_type == "timestamp":
+                gate_end = params["end_timestamp"]
+                checkpoint = params["end_timestamp"]
+            else:
+                gate_end = params["end_datetime"]
+                checkpoint = params["end_datetime"]
 
-                page_number +=1
-                offset_number += len(rows)
+            LOGGER.info("Window %s [%s, %s)" %
+                        (tap_stream_id, params["start_datetime"], params["end_datetime"]))
 
-        # If timestamp_key is not integerized, do so at millisecond level
-        if bookmark_type == "timestamp" and len(str(int(last_update))) == 10:
-            last_update = int(last_update * 1000)
+            completed, _last_update, prev_written_record = self._drain_pages(
+                tap_stream_id, params, schema, gate_end, params["last_update"],
+                prev_written_record, counter, raw_output)
 
-        current_state = singer.write_bookmark(
-            current_state,
-            tap_stream_id,
-            "last_update",
-            last_update,
-        )
+            if not completed:
+                LOGGER.warning(
+                    "Window ending %s did not fully drain (timeout/max_page). Leaving "
+                    "the bookmark at the last completed window and stopping so the next "
+                    "run resumes here." % checkpoint)
+                break
 
-        if prev_written_record:
-            current_state = singer.write_bookmark(current_state, tap_stream_id,
-                                        "last_record_extracted",
-                                        json.dumps(prev_written_record))
-
-        if raw_output == False:
-            singer.write_state(current_state)
+            if bookmark_type == "timestamp" and len(str(int(checkpoint))) == 10:
+                checkpoint = int(checkpoint * 1000)
+            current_state = singer.write_bookmark(
+                current_state, tap_stream_id, "last_update", checkpoint)
+            if prev_written_record:
+                current_state = singer.write_bookmark(
+                    current_state, tap_stream_id, "last_record_extracted",
+                    json.dumps(prev_written_record))
+            if raw_output is False:
+                singer.write_state(current_state)
+            LOGGER.info("Checkpoint: window drained; bookmark advanced to %s" % checkpoint)
 
         return current_state
 
