@@ -6,6 +6,13 @@
   checkpoint the bookmark only after a window fully drains, so a timeout cannot leapfrog
   past unfetched records. Opt-in; unset keeps the existing single-request behavior.
 - fix: log schema-validation failures with the reason and the offending record.
+- fix (#38): `get_end()` now uses a UTC "now" instead of naive local `datetime.now()`,
+  and the windowing param builder converts window epochs as UTC — the incremental end
+  bound no longer skews on a non-UTC host.
+- fix (#39): the bookmark-key type-validation asserts now actually run; they were
+  written as `assert(cond, "msg")` (a always-true tuple) and never fired.
+- fix (#40): popping the extract-timestamp before persisting `last_record_extracted`
+  no longer raises `KeyError` when the stream's schema does not declare `_sdc_extracted_at`.
 
 ### 0.2.17 (2026-03-30)
 - fix: Unblock other streams after one experiences an error

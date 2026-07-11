@@ -14,9 +14,9 @@ from tap_rest_api.helper import (
 
 def _win_end(cfg, start_str, k, size=3600):
     """The kth window's exclusive end, computed exactly as the tap does (via the
-    same epoch round-trip), so assertions are independent of the host timezone."""
+    same UTC epoch round-trip), so assertions are independent of the host timezone."""
     start_epoch = parse_datetime_tz(start_str).timestamp()
-    return format_datetime(cfg, datetime.datetime.fromtimestamp(start_epoch + k * size))
+    return format_datetime(cfg, datetime.datetime.utcfromtimestamp(start_epoch + k * size))
 
 
 def test_windows_contiguous_and_clamped():
@@ -61,10 +61,12 @@ def test_windowed_params_datetime_bookmark():
         "page_start": 0,
         "offset_start": 0,
     }
-    w_start = datetime.datetime(2026, 1, 1, 0, 0, 0).timestamp()
+    # UTC epoch for 2026-01-01T00:00:00Z (the window epochs are UTC)
+    w_start = datetime.datetime(2026, 1, 1, 0, 0, 0,
+                                tzinfo=datetime.timezone.utc).timestamp()
     w_end = w_start + 3600
     params = get_windowed_endpoint_params(cfg, "orders", w_start, w_end)
-    # bounds are formatted for the URL and are exactly one hour apart
+    # bounds are formatted (UTC) for the URL and are exactly one hour apart
     assert params["start_datetime"] == "2026-01-01T00:00:00.000000"
     assert params["end_datetime"] == "2026-01-01T01:00:00.000000"
     assert params["datetime_key"] == "modified"

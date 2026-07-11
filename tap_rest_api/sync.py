@@ -283,7 +283,9 @@ class Sync(object):
 
                     # prev_written_record may be persisted for the next run.
                     # EXTRACT_TIMESTAMP will be different. So popping it out before storing.
-                    record.pop(EXTRACT_TIMESTAMP)
+                    # It is only added when the schema declares it, so pop with a
+                    # default to avoid KeyError when the schema omits it.
+                    record.pop(EXTRACT_TIMESTAMP, None)
                     digest = get_digest_from_record(record)
                     prev_written_record = {"digest": digest}
 

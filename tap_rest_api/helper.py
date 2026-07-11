@@ -123,9 +123,9 @@ def get_bookmark_type_and_key(config, stream):
     dt_keys = config.get("datetime_keys")
     i_keys = config.get("index_keys")
 
-    assert(dt_key is None or isinstance(dt_key, str), "config.datetime_key must be a string")
-    assert(ts_key is None or isinstance(ts_key, str), "config.timestamp_key must be a string")
-    assert(i_key is None or isinstance(i_key, str), "config.index_key must be a string")
+    assert dt_key is None or isinstance(dt_key, str), "config.datetime_key must be a string"
+    assert ts_key is None or isinstance(ts_key, str), "config.timestamp_key must be a string"
+    assert i_key is None or isinstance(i_key, str), "config.index_key must be a string"
 
     if isinstance(ts_keys, dict) and ts_keys.get(stream):
         return "timestamp", ts_keys.get(stream)
@@ -237,11 +237,17 @@ def get_end(config, tap_stream_id):
                 end_from_config = dateutil.parser.parse(
                     config["end_datetime"]).timestamp()
             else:
-                end_from_config = datetime.datetime.now().timestamp()
+                # Bookmarks/records are UTC; use an explicit UTC "now" so the end
+                # bound does not skew on a non-UTC host.
+                end_from_config = datetime.datetime.now(
+                    datetime.timezone.utc).timestamp()
     elif bookmark_type == "datetime":
         end_from_config = config.get("end_datetime")
         if not end_from_config:
-            end_from_config = format_datetime(config, datetime.datetime.now())
+            # utcnow(), not now(): the datetime bookmark and the records it is
+            # compared against are UTC. Local now() would offset the upper bound
+            # by the host's timezone (e.g. gate out the last N hours of data).
+            end_from_config = format_datetime(config, datetime.datetime.utcnow())
     elif bookmark_type == "index":
         end_from_config = config.get("end_index")
     return end_from_config
@@ -392,8 +398,12 @@ def get_windowed_endpoint_params(config, tap_stream_id, w_start_epoch, w_end_epo
     """
     bookmark_type, bookmark_key = get_bookmark_type_and_key(config, tap_stream_id)
     params = dict(config)
-    start_datetime = format_datetime(config, datetime.datetime.fromtimestamp(w_start_epoch))
-    end_datetime = format_datetime(config, datetime.datetime.fromtimestamp(w_end_epoch))
+    # utcfromtimestamp (not fromtimestamp): the window epochs are UTC, and the
+    # formatted bounds go into the URL filter and the per-record write-gate, both
+    # of which compare against UTC record timestamps. Local conversion would skew
+    # both on a non-UTC host.
+    start_datetime = format_datetime(config, datetime.datetime.utcfromtimestamp(w_start_epoch))
+    end_datetime = format_datetime(config, datetime.datetime.utcfromtimestamp(w_end_epoch))
     params.update({
         "start_timestamp": w_start_epoch,
         "end_timestamp": w_end_epoch,
