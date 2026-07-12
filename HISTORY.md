@@ -1,5 +1,11 @@
 ## History
 
+### 0.2.19 (unreleased)
+- feature: per-stream replication windows via `window_sizes` (a dict of stream ID ->
+  window size in hours) that overrides the `window_size_hours`/`window_size_seconds`
+  default; `0`/`null` disables windowing for that stream. Lets a multi-stream tap
+  window only the streams that need it instead of all datetime/timestamp streams.
+
 ### 0.2.18 (2026-07-11)
 - feature: bounded, fully-drained time windows (`window_size_seconds`/`window_size_hours`).
   With a datetime/timestamp bookmark, replicate in contiguous half-open windows and

@@ -7,6 +7,7 @@ import pytest
 from tap_rest_api.helper import (
     iter_window_bounds,
     get_windowed_endpoint_params,
+    get_window_seconds,
     format_datetime,
     parse_datetime_tz,
 )
@@ -80,6 +81,41 @@ def test_windowed_params_requires_time_bookmark():
     cfg = {"index_keys": {"orders": "id"}}
     with pytest.raises(ValueError):
         get_windowed_endpoint_params(cfg, "orders", 0, 3600)
+
+
+# --- per-stream window size resolution (window_sizes) -------------------------
+
+def test_window_seconds_default_scalars():
+    # nothing set -> no windowing
+    assert get_window_seconds({}, "orders") is None
+    # hours default
+    assert get_window_seconds({"window_size_hours": 6}, "orders") == 6 * 3600.0
+    # seconds default takes priority over hours
+    assert get_window_seconds(
+        {"window_size_seconds": 900, "window_size_hours": 6}, "orders") == 900.0
+
+
+def test_window_seconds_per_stream_overrides_default():
+    cfg = {"window_size_hours": 6, "window_sizes": {"transactions": 1}}
+    # listed stream uses the per-stream value (in hours)
+    assert get_window_seconds(cfg, "transactions") == 1 * 3600.0
+    # unlisted streams fall back to the default
+    assert get_window_seconds(cfg, "invoices") == 6 * 3600.0
+
+
+def test_window_sizes_enable_only_named_streams():
+    # no scalar default -> only streams named in window_sizes are windowed
+    cfg = {"window_sizes": {"transactions": 3}}
+    assert get_window_seconds(cfg, "transactions") == 3 * 3600.0
+    assert get_window_seconds(cfg, "contracts") is None
+
+
+def test_window_sizes_per_stream_disable_beats_default():
+    # 0 or null in the dict disables windowing for that stream, even with a default set
+    cfg = {"window_size_hours": 6, "window_sizes": {"invoices": 0, "customers": None}}
+    assert get_window_seconds(cfg, "invoices") is None
+    assert get_window_seconds(cfg, "customers") is None
+    assert get_window_seconds(cfg, "transactions") == 6 * 3600.0
 
 
 def _windowing_config():

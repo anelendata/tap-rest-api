@@ -29,6 +29,7 @@ from .helper import (
     parse_datetime_tz,
     get_windowed_endpoint_params,
     iter_window_bounds,
+    get_window_seconds,
 )
 from .schema import Schema
 
@@ -129,9 +130,7 @@ class Sync(object):
         if raw_output is False:
             singer.write_schema(tap_stream_id, schema, key_properties)
 
-        window_seconds = self.config.get("window_size_seconds")
-        if not window_seconds and self.config.get("window_size_hours"):
-            window_seconds = float(self.config["window_size_hours"]) * 3600.0
+        window_seconds = get_window_seconds(self.config, tap_stream_id)
 
         # Fetch and iterate over to write the records
         with metrics.record_counter(tap_stream_id) as counter:

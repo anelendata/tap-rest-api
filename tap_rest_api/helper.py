@@ -428,6 +428,35 @@ def get_windowed_endpoint_params(config, tap_stream_id, w_start_epoch, w_end_epo
     return params
 
 
+def get_window_seconds(config, tap_stream_id):
+    """Resolve the replication window size (in seconds) for a stream, or None.
+
+    This mirrors the multi-stream bookmark-key convention (see ``datetime_keys``):
+    a per-stream dict overrides the single default value. Precedence, highest first:
+
+      1. ``window_sizes[stream]`` -- per-stream override, in HOURS. A value of 0 or
+         null explicitly disables windowing for that stream (even if a default is set).
+      2. ``window_size_seconds``  -- default, in seconds.
+      3. ``window_size_hours``    -- default, in hours.
+
+    Returns None when no window applies, in which case the tap issues a single
+    open-ended request (the original behavior). Letting ``window_sizes`` name only
+    the streams that need it is how a multi-stream tap windows, say, transactions
+    without windowing every other datetime stream.
+    """
+    per_stream = config.get("window_sizes")
+    if isinstance(per_stream, dict) and tap_stream_id in per_stream:
+        v = per_stream[tap_stream_id]
+        return float(v) * 3600.0 if v else None
+    secs = config.get("window_size_seconds")
+    if secs:
+        return float(secs)
+    hours = config.get("window_size_hours")
+    if hours:
+        return float(hours) * 3600.0
+    return None
+
+
 def get_http_headers(config=None):
     if not config or not config.get("http_headers"):
         return {"User-Agent": USER_AGENT,

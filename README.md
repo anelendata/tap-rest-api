@@ -221,6 +221,20 @@ Requirements:
 When `window_size_*` is unset, the tap issues a single open-ended request (the
 original behavior).
 
+**Per-stream windows.** In a multi-stream tap you often want to window only some
+streams. `window_sizes` is a dictionary of stream ID → window size **in hours**
+that overrides the `window_size_hours` / `window_size_seconds` default; a value of
+`0` or `null` disables windowing for that stream. This mirrors the
+[multi-stream bookmark keys](#multi-stream-bookmark-keys). For example, to window
+`transactions` only and leave every other stream on the single-request path:
+
+```json
+{
+  "assume_sorted": false,
+  "window_sizes": { "transactions": 6 }
+}
+```
+
 #### Multi-stream bookmark keys
 
 `timestamp_keys`, `datetime_keys`, and `index_keys` (plural) are dictionaries used
