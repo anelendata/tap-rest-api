@@ -1,6 +1,6 @@
 ## History
 
-### 0.2.19 (unreleased)
+### 0.2.19 (2026-07-13)
 - feature: per-stream replication windows via `window_sizes` (a dict of stream ID ->
   window size in hours) that overrides the `window_size_hours`/`window_size_seconds`
   default; `0`/`null` disables windowing for that stream. Lets a multi-stream tap
