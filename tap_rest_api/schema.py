@@ -14,8 +14,44 @@ from .helper import (
 
 import getschema
 import jsonschema
+from decimal import Decimal, InvalidOperation
+from jsonschema.validators import extend, validator_for
 
 LOGGER = singer.get_logger()
+
+
+def _multiple_of_decimal(validator, divisor, instance, schema):
+    """multipleOf check using exact Decimal arithmetic.
+
+    jsonschema's default multipleOf divides two IEEE-754 floats and tests whether
+    the quotient is integral. For ordinary decimals with a small divisor this
+    produces false negatives: e.g. 4281.23 is reported as "not a multiple of
+    1e-10" because 4281.23 / 1e-10 == 42812299999999.99 (binary rounding error),
+    not 42812300000000.0. Such constraints are commonly emitted by schema
+    inference (e.g. getschema) from a sample's decimal precision, so this silently
+    drops otherwise valid records. Comparing via Decimal(str(x)) avoids the binary
+    rounding error while still catching genuine violations (e.g. 1e-11 is not a
+    multiple of 1e-10).
+    """
+    if not validator.is_type(instance, "number"):
+        return
+    try:
+        failed = (Decimal(str(instance)) % Decimal(str(divisor))) != 0
+    except (InvalidOperation, ValueError):
+        # Fall back to jsonschema's float behavior if Decimal can't represent it.
+        quotient = instance / divisor
+        failed = int(quotient) != quotient
+    if failed:
+        yield jsonschema.exceptions.ValidationError(
+            "%r is not a multiple of %s" % (instance, divisor)
+        )
+
+
+# Validator identical to the one jsonschema would pick by default, except that
+# multipleOf uses exact Decimal arithmetic (see _multiple_of_decimal). Built once.
+_DecimalMultipleOfValidator = extend(
+    validator_for({}), {"multipleOf": _multiple_of_decimal}
+)
 
 
 class Schema(object):
@@ -27,7 +63,7 @@ class Schema(object):
     @staticmethod
     def validate(record, schema):
         try:
-            jsonschema.validate(record, schema)
+            _DecimalMultipleOfValidator(schema).validate(record)
         except jsonschema.exceptions.ValidationError as e:
             return False, str(e)
         return True, None

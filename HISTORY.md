@@ -1,5 +1,14 @@
 ## History
 
+### 0.2.20 (2026-08-05)
+- fix: `multipleOf` validation no longer drops records due to IEEE-754 rounding.
+  jsonschema's default `multipleOf` divides two floats and checks the quotient is
+  integral, which false-rejects ordinary decimals against a small divisor (e.g.
+  `4281.23` is rejected by `multipleOf: 1e-10` because `4281.23 / 1e-10` ==
+  `42812299999999.99`). Validation now checks `multipleOf` with exact `Decimal`
+  arithmetic; genuine violations are still reported. This eliminates silent record
+  loss for inferred schemas that pin decimal precision via `multipleOf`.
+
 ### 0.2.19 (2026-07-13)
 - feature: per-stream replication windows via `window_sizes` (a dict of stream ID ->
   window size in hours) that overrides the `window_size_hours`/`window_size_seconds`
