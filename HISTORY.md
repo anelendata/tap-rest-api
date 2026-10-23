@@ -7,6 +7,8 @@
   and `next_page_token` (URL-quoted). Paging ends when no token is returned. Applies to
   sync and `--infer_schema`. Needed for APIs that dropped offset paging, e.g. Jira
   Software's `/rest/software/1.0/sprint/{id}/issue` (`nextPageToken`).
+- fix: `--infer_schema` with `safe_schema_update` (the default) crashed when the stream
+  had no schema file yet (`'NoneType' object has no attribute 'items'`).
 - fix: `tap-rest-api --help` crashed on the literal `%` in a help string.
 - ci: GitHub Actions `tests` (unit tests, Python 3.9-3.12) and `release` (tag-triggered
   build, install smoke test, PyPI Trusted Publishing, post-publish verify).

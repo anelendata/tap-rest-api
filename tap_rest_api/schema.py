@@ -361,7 +361,8 @@ def infer_schema(
             schema["properties"][EXTRACT_TIMESTAMP] = timestamp_format
             schema["properties"][BATCH_TIMESTAMP] = timestamp_format
 
-        if safe_update:
+        # Nothing to merge into on the first inference of a stream
+        if safe_update and cur_schema:
             safe_schema = schema_service.safe_update(cur_schema, schema)
             schemas[tap_stream_id] = safe_schema
         else:

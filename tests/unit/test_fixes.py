@@ -109,3 +109,22 @@ def test_drain_pages_no_keyerror_when_schema_omits_extract_timestamp(monkeypatch
     assert completed is True
     assert len(written) == 1
     assert "_sdc_extracted_at" not in written[0]
+
+
+# --- infer_schema with safe_update and no existing schema file -------------------
+
+def test_infer_schema_safe_update_without_existing_schema(monkeypatch, tmp_path):
+    """The first inference of a stream has no schema to merge into; it used to crash
+    in safe_update(None, schema) with 'NoneType' object has no attribute 'items'."""
+    import json
+    import tap_rest_api.schema as SC
+
+    monkeypatch.setattr(SC.Schema, "infer_schema", lambda self, stream_id: {
+        "type": "object", "properties": {"id": {"type": ["null", "integer"]}}})
+    cfg = {"schema": "orders", "schema_dir": str(tmp_path / "schema"),
+           "catalog_dir": str(tmp_path / "catalog"), "url": "http://x"}
+    SC.infer_schema(cfg, safe_update=True)
+
+    written = json.loads((tmp_path / "schema" / "orders.json").read_text())
+    assert "id" in written["properties"]
+
