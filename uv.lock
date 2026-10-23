@@ -205,18 +205,17 @@ wheels = [
 
 [[package]]
 name = "getschema"
-version = "0.2.11"
+version = "0.2.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpath-ng" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
-    { name = "setuptools" },
     { name = "simplejson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/22/59/525147874d877c7168aca77ed965ff96076769570a0fd28cfe128ef41402/getschema-0.2.11.tar.gz", hash = "sha256:5719704a7ba2fe9b8dc78b2e60344b14468022b24ee6869287cdd226e17c8bb3", size = 10623, upload-time = "2025-09-03T00:31:42.693Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/02/7d9bacd42275ac6cb73e2cf6c04b8385f24b68ee4882516b1889b879088b/getschema-0.2.12.tar.gz", hash = "sha256:f975251bee876ef88950e446c28a7d09e8ba10ac99529bc3a390323d6f30bf17", size = 13875, upload-time = "2026-10-23T22:25:51.621Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/6a/b25366761cd4d9dba05fde888d3d1b2a6899cc5fcfb99b7c7016a134bf85/getschema-0.2.11-py3-none-any.whl", hash = "sha256:fdcefe0412de7f721214a4cf6593fce9d5243592ad3ab072f66fd359596a66a4", size = 11522, upload-time = "2025-09-03T00:31:41.881Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/46/8d6fce23aadc58711c47668ec5dfac7d749cd9c4453c3de3c095e523ce7c/getschema-0.2.12-py3-none-any.whl", hash = "sha256:2f9d8efb1b714b4474784cab6c314dcb68acb2002c7666a8d241bb716b273c2e", size = 12215, upload-time = "2026-10-23T22:25:50.488Z" },
 ]
 
 [[package]]
@@ -593,15 +592,6 @@ wheels = [
 ]
 
 [[package]]
-name = "setuptools"
-version = "80.9.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/18/5d/3bf57dcd21979b887f014ea83c24ae194cfcd12b9e0fda66b957c69d1fca/setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c", size = 1319958, upload-time = "2025-05-27T00:56:51.443Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922", size = 1201486, upload-time = "2025-05-27T00:56:49.664Z" },
-]
-
-[[package]]
 name = "simplejson"
 version = "3.13.2"
 source = { registry = "https://pypi.org/simple" }
@@ -656,7 +646,7 @@ dev = [
 requires-dist = [
     { name = "attrs", specifier = "==25.3.0" },
     { name = "backoff", specifier = ">=1.8.0" },
-    { name = "getschema", specifier = ">=0.2.11" },
+    { name = "getschema", specifier = ">=0.2.12" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=2.6.0,<3.dev0" },
     { name = "python-dateutil", specifier = "==2.9.0.post0" },

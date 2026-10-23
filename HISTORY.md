@@ -14,7 +14,8 @@
 - fix: `tap-rest-api --help` crashed on the literal `%` in a help string.
 - ci: GitHub Actions `tests` (unit tests, Python 3.9-3.12) and `release` (tag-triggered
   build, install smoke test, PyPI Trusted Publishing, post-publish verify).
-- dependency: `jinja2>=3.1`.
+- dependency: `jinja2>=3.1`; `getschema>=0.2.12` (null / empty-object inference fixes that
+  `--infer_schema` needs for APIs whose object fields are sometimes null).
 
 ### 0.2.20 (2026-08-05)
 - fix: `multipleOf` validation no longer drops records due to IEEE-754 rounding.
