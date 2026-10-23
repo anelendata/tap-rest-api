@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tap-rest-api"
-version = "0.2.20"
+version = "0.2.21"
 description = "Singer.io tap for extracting data from any REST API"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -28,6 +28,7 @@ dependencies = [
     "attrs==25.3.0",
     "backoff>=1.8.0",
     "getschema>=0.2.11",
+    "jinja2>=3.1",
     "jsonschema>=2.6.0,<3.dev0",
     "python-dateutil==2.9.0.post0",
     "requests==2.32.5",

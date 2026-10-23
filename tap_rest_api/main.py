@@ -103,7 +103,8 @@ def parse_args(spec_file, required_config_keys):
             "--" + arg,
             type=TYPES[type_],
             default=SPEC["args"][arg].get("default"),
-            help=SPEC["args"][arg].get("help"),
+            # argparse %-formats help strings; escape literal % (e.g. '%Y-%m-%d')
+            help=(SPEC["args"][arg].get("help") or "").replace("%", "%%") or None,
             required=SPEC["args"][arg].get("required", False))
 
     # Default singer arguments, commands, and required args
@@ -200,7 +201,9 @@ def main():
         if args.state:
             state.update(args.state)
             LOGGER.debug("State read: %s" % state)
-            sync(CONFIG, state, args.catalog, raw=args.raw)
+        # Without --state, sync from the start (this call used to be inside the if
+        # above, so a run without --state exited 0 having synced nothing)
+        sync(CONFIG, state, args.catalog, raw=args.raw)
     else:
         raise Exception("No streams were selected")
 

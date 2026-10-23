@@ -109,3 +109,51 @@ def test_drain_pages_no_keyerror_when_schema_omits_extract_timestamp(monkeypatch
     assert completed is True
     assert len(written) == 1
     assert "_sdc_extracted_at" not in written[0]
+
+
+# --- infer_schema with safe_update and no existing schema file -------------------
+
+def test_infer_schema_safe_update_without_existing_schema(monkeypatch, tmp_path):
+    """The first inference of a stream has no schema to merge into; it used to crash
+    in safe_update(None, schema) with 'NoneType' object has no attribute 'items'."""
+    import json
+    import tap_rest_api.schema as SC
+
+    monkeypatch.setattr(SC.Schema, "infer_schema", lambda self, stream_id: {
+        "type": "object", "properties": {"id": {"type": ["null", "integer"]}}})
+    cfg = {"schema": "orders", "schema_dir": str(tmp_path / "schema"),
+           "catalog_dir": str(tmp_path / "catalog"), "url": "http://x"}
+    SC.infer_schema(cfg, safe_update=True)
+
+    written = json.loads((tmp_path / "schema" / "orders.json").read_text())
+    assert "id" in written["properties"]
+
+
+# --- main(): sync must run without --state ------------------------------------
+
+@pytest.mark.parametrize("with_state", [False, True])
+def test_main_syncs_with_and_without_state(monkeypatch, tmp_path, with_state):
+    """Since 0.2.15 the sync call sat inside `if args.state:`, so a run without
+    --state exited 0 having synced nothing."""
+    import json, sys
+    import tap_rest_api.main as M
+
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"schema": "orders", "url": "http://x/orders"}))
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(json.dumps({"streams": [
+        {"stream": "orders", "tap_stream_id": "orders",
+         "schema": {"type": "object", "selected": True, "properties": {}}}]}))
+    argv = ["tap-rest-api", "--config", str(config), "--catalog", str(catalog)]
+    if with_state:
+        state = tmp_path / "state.json"
+        state.write_text(json.dumps({"bookmarks": {"orders": {"last_update": 5}}}))
+        argv += ["--state", str(state)]
+
+    calls = []
+    monkeypatch.setattr(M, "sync", lambda config, state, catalog, raw=False: calls.append(state))
+    monkeypatch.setattr(sys, "argv", argv)
+    M.main()
+
+    assert len(calls) == 1
+    assert calls[0] == ({"bookmarks": {"orders": {"last_update": 5}}} if with_state else {})

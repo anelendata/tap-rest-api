@@ -1,0 +1,111 @@
+name: release
+
+# Push a version tag (e.g. `git tag v0.2.21 && git push origin v0.2.21`) to build,
+# install-test, and publish to PyPI via Trusted Publishing (OIDC) — no API token.
+#
+# Flow: build -> smoke (install-test the built artifacts; gates publish) ->
+# publish -> verify (install the published package from PyPI).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Tag matches pyproject.toml version
+        run: |
+          python - <<'EOF'
+          import os, tomllib
+          want = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          have = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          assert have == want, f"pyproject.toml version {have} != tag {want}"
+          print("version OK:", have)
+          EOF
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # Install the built wheel AND sdist in a clean venv and prove they work, before
+  # anything is published. Catches missing package data (default_spec.json), a
+  # version that doesn't match the tag, and a broken command path.
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        artifact: ["*.whl", "*.tar.gz"]
+    steps:
+      # The checkout is only for tests/unit; the package source is removed below so
+      # the tests import the INSTALLED artifact.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Install ${{ matrix.artifact }} in a clean venv
+        run: |
+          rm -rf tap_rest_api
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/venv/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/venv/bin/pip" install dist/${{ matrix.artifact }} pytest
+      - name: Installed version matches the tag
+        run: |
+          python -c "import os, importlib.metadata as m; want = os.environ['GITHUB_REF_NAME'].removeprefix('v'); have = m.version('tap-rest-api'); assert have == want, f'{have} != {want}'; print('version OK:', have)"
+          tap-rest-api --help >/dev/null && echo "tap-rest-api --help: OK"
+      - name: Bundled data files are present
+        run: |
+          python -c "import importlib.resources as r, sys; sys.exit(0 if (r.files('tap_rest_api')/'default_spec.json').is_file() else 1)" \
+            && echo "bundled: default_spec.json" || { echo "MISSING: default_spec.json"; exit 1; }
+      - name: Unit tests against the installed package
+        run: |
+          python -c "import tap_rest_api, sys; assert 'site-packages' in tap_rest_api.__file__, tap_rest_api.__file__"
+          pytest -q tests/unit
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Confirm the real, published package installs from PyPI. The simple index lags
+  # the upload behind a CDN, so retry for a few minutes before failing.
+  verify:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install from PyPI (retry for index propagation)
+        run: |
+          set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+          python -m venv "$RUNNER_TEMP/pv"
+          "$RUNNER_TEMP/pv/bin/pip" install --upgrade pip >/dev/null
+          for i in $(seq 1 15); do
+            if "$RUNNER_TEMP/pv/bin/pip" install --no-cache-dir "tap-rest-api==$V"; then ok=1; break; fi
+            echo "-- not on the index yet (attempt $i); waiting 20s…"; sleep 20
+          done
+          [ "${ok:-}" = 1 ] || { echo "tap-rest-api==$V never became installable from PyPI"; exit 1; }
+          "$RUNNER_TEMP/pv/bin/python" -c "import os, importlib.metadata as m; want = os.environ['GITHUB_REF_NAME'].removeprefix('v'); have = m.version('tap-rest-api'); assert have == want, f'{have} != {want}'; print('PyPI install OK:', have)"
+          "$RUNNER_TEMP/pv/bin/tap-rest-api" --help >/dev/null && echo "tap-rest-api --help: OK"

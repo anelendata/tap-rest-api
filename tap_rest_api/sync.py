@@ -12,6 +12,9 @@ from .helper import (
     get_bookmark_type_and_key,
     get_end,
     get_endpoint,
+    get_next_page_endpoint,
+    get_next_page_token,
+    get_next_page_token_level,
     get_init_endpoint_params,
     get_last_update,
     get_float_timestamp,
@@ -182,6 +185,12 @@ class Sync(object):
         next_last_update = None
         completed = False
 
+        # Token pagination: page 1 is `url`; page 2+ is `next_page_url` rendered with
+        # the token from the previous response. Ends when no token comes back.
+        token_paging = get_next_page_token_level(self.config, tap_stream_id) is not None
+        first_endpoint = None
+        next_page_token = None
+
         while True:
             if (self.started_at and global_timeout and
                 datetime.datetime.now() - self.started_at >= datetime.timedelta(seconds=global_timeout)):
@@ -194,10 +203,19 @@ class Sync(object):
             params.update({"last_update": last_update})
 
             url = self.config.get("urls", {}).get(tap_stream_id, self.config["url"])
-            endpoint = get_endpoint(url, tap_stream_id, params)
+            if next_page_token is not None:
+                # Page 2+ in token mode. A missing token never gets here: it already
+                # ended the loop in the exit checks below.
+                endpoint = get_next_page_endpoint(
+                    self.config, tap_stream_id, params, first_endpoint, next_page_token)
+            else:
+                # Offset/page paging (every page), or the first page in token mode
+                endpoint = get_endpoint(url, tap_stream_id, params)
+                first_endpoint = endpoint
             LOGGER.info("GET %s", endpoint)
 
             rows = []
+            request_failed = False
             try:
                 rows = generate_request(tap_stream_id, endpoint, auth_method,
                                         headers,
@@ -207,6 +225,8 @@ class Sync(object):
                 if page_number == self.config.get("page_start", 0):
                     raise
                 LOGGER.error(f"Endpoint responded with an error: {str(e)}")
+                request_failed = True
+            raw_data = rows
 
             # In case the record is not at the root level
             record_list_level = self.config.get("record_list_level")
@@ -292,7 +312,21 @@ class Sync(object):
             LOGGER.debug(f"    row process completed in {row_process_sec} seconds.")
 
             # Exit conditions
-            if len(rows) < self.config["items_per_page"]:
+            if token_paging:
+                if request_failed:
+                    # Without the response there is no token to continue from.
+                    LOGGER.error("No next page token after the failed request. Stopping the extraction.")
+                    break
+                new_token = get_next_page_token(self.config, tap_stream_id, raw_data)
+                if new_token is None:
+                    LOGGER.info("No next page token in the response. Finishing the extraction")
+                    completed = True
+                    break
+                if new_token == next_page_token:
+                    LOGGER.error("The same next page token was returned twice. Stopping the extraction.")
+                    break
+                next_page_token = new_token
+            elif len(rows) < self.config["items_per_page"]:
                 LOGGER.info(("Response is less than set item per page (%d)." +
                             "Finishing the extraction") %
                             self.config["items_per_page"])

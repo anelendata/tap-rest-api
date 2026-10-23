@@ -4,6 +4,7 @@ from urllib.parse import quote as urlquote
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from dateutil.tz import tzoffset
 
+import jinja2
 import jsonpath_ng as jsonpath
 
 import singer
@@ -487,6 +488,60 @@ def get_endpoint(url_format, tap_stream_id, data):
         params[key] = urlquote(str(data[key]).encode("utf-8"))
     params["resource"] = urlquote(str(tap_stream_id).encode("utf-8"))
     return url_format.format(**params)
+
+
+def get_next_page_token_level(config, tap_stream_id):
+    """The jsonpath to the continuation token in the raw response, or None.
+
+    ``next_page_token_level`` is a jsonpath string, or a dictionary of stream ID ->
+    jsonpath (same convention as ``record_list_level``). Token pagination is enabled
+    for a stream only when this resolves to a value.
+    """
+    level = config.get("next_page_token_level")
+    if isinstance(level, dict):
+        level = level.get(tap_stream_id)
+    return level or None
+
+
+def get_next_page_token(config, tap_stream_id, raw_data):
+    """Extract the continuation token from the raw (un-leveled) response.
+
+    Returns None when the token is missing, null or empty, which ends paging.
+    """
+    level = get_next_page_token_level(config, tap_stream_id)
+    if not level or not isinstance(raw_data, (dict, list)):
+        return None
+    found = _get_jsonpath(raw_data, level)
+    if not found or found[0] in (None, ""):
+        return None
+    return found[0]
+
+
+def get_next_page_endpoint(config, tap_stream_id, data, endpoint, next_page_token):
+    """Render the URL of the next page from the ``next_page_url`` Jinja2 template.
+
+    ``next_page_urls`` (stream ID -> template) overrides ``next_page_url`` per stream,
+    same as ``urls`` over ``url``. The template gets every value ``get_endpoint``
+    gets (URL-quoted the same way), plus:
+
+    - ``endpoint``: the URL of the first page (``url`` rendered for this query)
+    - ``next_page_token``: the token from the previous response, URL-quoted
+      (``/``, ``+`` and ``=`` included)
+
+    Example: ``"{{ endpoint }}&nextPageToken={{ next_page_token }}"``
+    """
+    template = (config.get("next_page_urls") or {}).get(
+        tap_stream_id, config.get("next_page_url"))
+    if not template:
+        raise ValueError(
+            f"{tap_stream_id}: next_page_token_level is set but next_page_url is not")
+    params = dict()
+    for key in data:
+        params[key] = urlquote(str(data[key]).encode("utf-8"))
+    params["resource"] = urlquote(str(tap_stream_id).encode("utf-8"))
+    params["endpoint"] = endpoint
+    params["next_page_token"] = urlquote(str(next_page_token).encode("utf-8"), safe="")
+    return jinja2.Template(template, undefined=jinja2.StrictUndefined).render(**params)
 
 
 def _giveup(exc):
