@@ -201,7 +201,9 @@ def main():
         if args.state:
             state.update(args.state)
             LOGGER.debug("State read: %s" % state)
-            sync(CONFIG, state, args.catalog, raw=args.raw)
+        # Without --state, sync from the start (this call used to be inside the if
+        # above, so a run without --state exited 0 having synced nothing)
+        sync(CONFIG, state, args.catalog, raw=args.raw)
     else:
         raise Exception("No streams were selected")
 

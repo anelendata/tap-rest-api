@@ -128,3 +128,32 @@ def test_infer_schema_safe_update_without_existing_schema(monkeypatch, tmp_path)
     written = json.loads((tmp_path / "schema" / "orders.json").read_text())
     assert "id" in written["properties"]
 
+
+# --- main(): sync must run without --state ------------------------------------
+
+@pytest.mark.parametrize("with_state", [False, True])
+def test_main_syncs_with_and_without_state(monkeypatch, tmp_path, with_state):
+    """Since 0.2.15 the sync call sat inside `if args.state:`, so a run without
+    --state exited 0 having synced nothing."""
+    import json, sys
+    import tap_rest_api.main as M
+
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"schema": "orders", "url": "http://x/orders"}))
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(json.dumps({"streams": [
+        {"stream": "orders", "tap_stream_id": "orders",
+         "schema": {"type": "object", "selected": True, "properties": {}}}]}))
+    argv = ["tap-rest-api", "--config", str(config), "--catalog", str(catalog)]
+    if with_state:
+        state = tmp_path / "state.json"
+        state.write_text(json.dumps({"bookmarks": {"orders": {"last_update": 5}}}))
+        argv += ["--state", str(state)]
+
+    calls = []
+    monkeypatch.setattr(M, "sync", lambda config, state, catalog, raw=False: calls.append(state))
+    monkeypatch.setattr(sys, "argv", argv)
+    M.main()
+
+    assert len(calls) == 1
+    assert calls[0] == ({"bookmarks": {"orders": {"last_update": 5}}} if with_state else {})
