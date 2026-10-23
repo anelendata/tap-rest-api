@@ -1,5 +1,17 @@
 ## History
 
+### 0.2.21 (2026-10-23)
+- feature: token (cursor) pagination. `next_page_token_level` (jsonpath to the token in
+  the raw response, per-stream dict allowed) turns it on; `next_page_url` /
+  `next_page_urls` is a Jinja2 template for page 2+ with `endpoint` (the first page URL)
+  and `next_page_token` (URL-quoted). Paging ends when no token is returned. Applies to
+  sync and `--infer_schema`. Needed for APIs that dropped offset paging, e.g. Jira
+  Software's `/rest/software/1.0/sprint/{id}/issue` (`nextPageToken`).
+- fix: `tap-rest-api --help` crashed on the literal `%` in a help string.
+- ci: GitHub Actions `tests` (unit tests, Python 3.9-3.12) and `release` (tag-triggered
+  build, install smoke test, PyPI Trusted Publishing, post-publish verify).
+- dependency: `jinja2>=3.1`.
+
 ### 0.2.20 (2026-08-05)
 - fix: `multipleOf` validation no longer drops records due to IEEE-754 rounding.
   jsonschema's default `multipleOf` divides two floats and checks the quotient is

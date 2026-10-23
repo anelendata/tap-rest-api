@@ -8,6 +8,7 @@ from singer import utils
 
 from .helper import (
     get_streams, generate_request, get_endpoint, get_init_endpoint_params,
+    get_next_page_endpoint, get_next_page_token, get_next_page_token_level,
     get_record, get_record_list, get_http_headers, unnest,
     EXTRACT_TIMESTAMP, BATCH_TIMESTAMP,
 )
@@ -222,6 +223,10 @@ class Schema(object):
         records = []
         page_number = params.get("page_start", 0)
         offset_number = params.get("offset_start", 0)
+        # Token pagination (see Sync._drain_pages)
+        token_paging = get_next_page_token_level(self.config, stream_id) is not None
+        first_endpoint = None
+        next_page_token = None
         while True:
             params.update({"current_page": page_number})
             params.update({"current_page_one_base": page_number + 1})
@@ -232,12 +237,18 @@ class Schema(object):
                 with open(os.path.join(sample_dir, stream_id + ".json"), 'r') as file:
                     data = json.load(file)
             else:
-                endpoint = get_endpoint(url, stream_id, params)
+                if next_page_token is None:
+                    endpoint = get_endpoint(url, stream_id, params)
+                    first_endpoint = endpoint
+                else:
+                    endpoint = get_next_page_endpoint(
+                        self.config, stream_id, params, first_endpoint, next_page_token)
                 LOGGER.info("GET %s", endpoint)
                 data = generate_request(stream_id, endpoint, auth_method,
                                         headers,
                                         self.config.get("username"),
                                         self.config.get("password"))
+            raw_data = data
 
             # In case the record is not at the root level
             record_list_level = self.config.get("record_list_level")
@@ -265,7 +276,16 @@ class Schema(object):
             # Exit conditions
             if sample_dir:
                 break
-            if len(data) < self.config["items_per_page"]:
+            if token_paging:
+                new_token = get_next_page_token(self.config, stream_id, raw_data)
+                if new_token is None:
+                    LOGGER.info("No next page token in the response. Finishing the extraction")
+                    break
+                if new_token == next_page_token:
+                    LOGGER.error("The same next page token was returned twice. Stopping the extraction.")
+                    break
+                next_page_token = new_token
+            elif len(data) < self.config["items_per_page"]:
                 LOGGER.info(
                     f"Response is less than set item per page ({len(data)}/{self.config['items_per_page']}). Finishing the extraction"
                 )

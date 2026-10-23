@@ -20,6 +20,7 @@ A configurable REST API [Singer](https://singer.io) tap.
   - [Incremental replication: `assume_sorted` and windowing](#incremental-replication-assume_sorted-and-windowing)
   - [Multi-stream bookmark keys](#multi-stream-bookmark-keys)
   - [Record list level and record level](#record-list-level-and-record-level)
+  - [Token pagination: `next_page_token_level` and `next_page_url`](#token-pagination-next_page_token_level-and-next_page_url)
   - [unnest](#unnest)
 - [Authentication](#authentication)
 - [Custom http-headers](#custom-http-headers)
@@ -277,6 +278,41 @@ See [Multiple streams](#multiple-streams) for the full multi-stream setup.
   "min_magnitude": 1
 }
 ```
+
+#### Token pagination: `next_page_token_level` and `next_page_url`
+
+Some APIs page with a continuation token (cursor) instead of an offset or a page
+number: each response carries a token, and the next page is requested with it
+(Jira's `nextPageToken`, for example). Configure it with:
+
+- `next_page_token_level`: the jsonpath to the token in the raw response, the same
+  convention as `record_list_level` (a string, or a dictionary of stream ID ->
+  jsonpath). Setting it turns token pagination on for the stream.
+- `next_page_url`: a [Jinja2](https://jinja.palletsprojects.com/) template for the
+  URL of page 2 and later (`next_page_urls`, a dictionary of stream ID -> template,
+  overrides it per stream, like `urls` over `url`). On top of the variables
+  available to `url`, the template gets:
+  - `endpoint`: the URL of the first page (`url` rendered for this query)
+  - `next_page_token`: the token from the previous response, URL-quoted
+
+The first page is always requested from `url`. Paging ends when the response has
+no token (missing, null or empty); with token pagination a page shorter than
+`items_per_page` does not end it. The tap also stops, logging an error, when a
+request for a later page fails or when the same token comes back twice. `max_page`
+still applies.
+
+```json
+{
+  "url": "https://api.atlassian.com/ex/jira/{cloud_id}/rest/software/1.0/sprint/{sprint_id}/issue?maxResults=100",
+  "record_list_level": "issues[*]",
+  "next_page_token_level": "$.nextPageToken",
+  "next_page_url": "{{ endpoint }}&nextPageToken={{ next_page_token }}"
+}
+```
+
+If the config file itself is rendered by another Jinja2 layer before the tap reads
+it (handoff renders `files/` this way), wrap the template so that layer leaves it
+alone: `"next_page_url": "{% raw %}{{ endpoint }}&nextPageToken={{ next_page_token }}{% endraw %}"`.
 
 #### unnest
 

@@ -228,6 +228,18 @@
             "default": null,
             "help": "Set this like 'level_a,level_b...' if the target object is at raw_individual_record[level_a][level_b]..."
         },
+        "next_page_token_level":
+        {
+            "type": ["string", "object"],
+            "default": null,
+            "help": "Token (cursor) pagination: jsonpath to the next page token in the raw response, e.g. '$.nextPageToken'. Use a dictionary to specify per stream. When set, pages 2+ are fetched from next_page_url and paging ends when the token is missing or empty."
+        },
+        "next_page_url":
+        {
+            "type": "string",
+            "default": null,
+            "help": "Jinja2 template of the next page URL, rendered with the config/run-time variables plus endpoint (the first page URL) and next_page_token (URL-quoted), e.g. '{{ endpoint }}&nextPageToken={{ next_page_token }}'. Use next_page_urls (stream ID -> template) in the config to specify per stream."
+        },
         "unnest":
         {
             "type": ["string", "object"],
