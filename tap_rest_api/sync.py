@@ -203,7 +203,7 @@ class Sync(object):
             params.update({"last_update": last_update})
 
             url = self.config.get("urls", {}).get(tap_stream_id, self.config["url"])
-            if token_paging and next_page_token is not None:
+            if next_page_token is not None:
                 # Page 2+ in token mode. A missing token never gets here: it already
                 # ended the loop in the exit checks below.
                 endpoint = get_next_page_endpoint(
