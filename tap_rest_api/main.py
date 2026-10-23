@@ -103,7 +103,8 @@ def parse_args(spec_file, required_config_keys):
             "--" + arg,
             type=TYPES[type_],
             default=SPEC["args"][arg].get("default"),
-            help=SPEC["args"][arg].get("help"),
+            # argparse %-formats help strings; escape literal % (e.g. '%Y-%m-%d')
+            help=(SPEC["args"][arg].get("help") or "").replace("%", "%%") or None,
             required=SPEC["args"][arg].get("required", False))
 
     # Default singer arguments, commands, and required args
