@@ -123,29 +123,64 @@ def test_drain_pages_follows_tokens_until_missing(monkeypatch):
                          first + "&nextPageToken=t2"]
 
 
-def test_drain_pages_failed_token_page_is_not_completed(monkeypatch):
+def _drain_expect_raise(monkeypatch, cfg, fake_request, match):
+    """Like _drain, but the extraction must fail loudly; returns what was written."""
+    import tap_rest_api.sync as S
+    import tap_rest_api.schema as SC
+
+    written = []
+    monkeypatch.setattr(S, "generate_request", fake_request)
+    monkeypatch.setattr(SC.Schema, "validate", staticmethod(lambda rec, sch: (True, None)))
+    monkeypatch.setattr(S.singer, "write_record", lambda stream, rec: written.append(rec))
+    s = S.Sync(cfg, {}, None)
+    s.started_at = datetime.datetime.now()
+    schema = {"type": "object", "properties": {"id": {"type": "integer"}}}
+    params = dict(cfg, current_page=0, current_offset=0, last_update=0)
+    with pytest.raises(Exception, match=match):
+        with S.metrics.record_counter("issues") as counter:
+            s._drain_pages("issues", params, schema, None, 0, None, counter, raw_output=False)
+    return written
+
+
+def test_drain_pages_failed_token_page_raises(monkeypatch):
+    # A failed later page leaves the extraction incomplete: the process must fail
+    # (non-zero exit) instead of exiting 0 with partial data.
     def fake_request(stream, endpoint, *a, **k):
         if _token_of(endpoint):
             raise RuntimeError("503")
         return PAGES[None]
 
-    completed, written = _drain(monkeypatch, _jira_like_config(), fake_request)
-
-    assert completed is False
+    written = _drain_expect_raise(monkeypatch, _jira_like_config(), fake_request, "503")
+    # Records fetched before the failure were still written out
     assert [r["id"] for r in written] == [1, 2]
 
 
-def test_drain_pages_stops_on_repeated_token(monkeypatch):
+def test_drain_pages_repeated_token_raises(monkeypatch):
     calls = []
 
     def fake_request(stream, endpoint, *a, **k):
         calls.append(endpoint)
         return {"issues": [{"id": len(calls)}], "nextPageToken": "same"}
 
-    completed, written = _drain(monkeypatch, _jira_like_config(), fake_request)
-
-    assert completed is False
+    _drain_expect_raise(monkeypatch, _jira_like_config(), fake_request, "same next page token")
     assert len(calls) == 2
+
+
+def test_drain_pages_offset_mode_later_page_failure_unchanged(monkeypatch):
+    # Offset/page mode keeps its legacy behavior: a failed later page is logged and
+    # ends the extraction without raising.
+    cfg = _jira_like_config()
+    del cfg["next_page_token_level"]
+    cfg["url"] = "http://h/items?startAt={current_offset}"
+    cfg["items_per_page"] = 2
+
+    def fake_request(stream, endpoint, *a, **k):
+        if "startAt=0" in endpoint:
+            return PAGES[None]  # a full page of 2
+        raise RuntimeError("503")
+
+    completed, written = _drain(monkeypatch, cfg, fake_request)
+    assert [r["id"] for r in written] == [1, 2]
 
 
 def test_drain_pages_offset_paging_unchanged_without_token_level(monkeypatch):

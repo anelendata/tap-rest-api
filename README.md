@@ -297,9 +297,11 @@ number: each response carries a token, and the next page is requested with it
 
 The first page is always requested from `url`. Paging ends when the response has
 no token (missing, null or empty); with token pagination a page shorter than
-`items_per_page` does not end it. The tap also stops, logging an error, when a
-request for a later page fails or when the same token comes back twice. `max_page`
-still applies.
+`items_per_page` does not end it. A page cannot be skipped in token mode (the next
+token is in its response), so when a request for a later page still fails after the
+retries, or the same token comes back twice, the tap **fails** (non-zero exit) after
+writing the records it already fetched. A caller can then tell a complete extraction
+from a partial one by the exit code. `max_page` still applies.
 
 ```json
 {
