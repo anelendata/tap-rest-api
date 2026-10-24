@@ -215,17 +215,18 @@ class Sync(object):
             LOGGER.info("GET %s", endpoint)
 
             rows = []
-            request_failed = False
             try:
                 rows = generate_request(tap_stream_id, endpoint, auth_method,
                                         headers,
                                         self.config.get("username"),
                                         self.config.get("password"))
             except Exception as e:
-                if page_number == self.config.get("page_start", 0):
+                # Token mode cannot skip a page (the next token is in this response),
+                # so a failed page means an incomplete extraction: fail the process
+                # instead of exiting 0 with partial data. Records already written stay.
+                if page_number == self.config.get("page_start", 0) or token_paging:
                     raise
                 LOGGER.error(f"Endpoint responded with an error: {str(e)}")
-                request_failed = True
             raw_data = rows
 
             # In case the record is not at the root level
@@ -313,18 +314,14 @@ class Sync(object):
 
             # Exit conditions
             if token_paging:
-                if request_failed:
-                    # Without the response there is no token to continue from.
-                    LOGGER.error("No next page token after the failed request. Stopping the extraction.")
-                    break
                 new_token = get_next_page_token(self.config, tap_stream_id, raw_data)
                 if new_token is None:
                     LOGGER.info("No next page token in the response. Finishing the extraction")
                     completed = True
                     break
                 if new_token == next_page_token:
-                    LOGGER.error("The same next page token was returned twice. Stopping the extraction.")
-                    break
+                    raise RuntimeError(
+                        "The same next page token was returned twice; the extraction is incomplete.")
                 next_page_token = new_token
             elif len(rows) < self.config["items_per_page"]:
                 LOGGER.info(("Response is less than set item per page (%d)." +

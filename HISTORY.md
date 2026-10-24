@@ -1,5 +1,11 @@
 ## History
 
+### 0.2.22 (2026-10-23)
+- fix: token pagination exited 0 on an incomplete extraction. A later page that still
+  fails after the retries, or a repeated next page token, now raises, so the process
+  exits non-zero (records already fetched are still written). Offset/page paging keeps
+  its existing behavior.
+
 ### 0.2.21 (2026-10-23)
 - feature: token (cursor) pagination. `next_page_token_level` (jsonpath to the token in
   the raw response, per-stream dict allowed) turns it on; `next_page_url` /

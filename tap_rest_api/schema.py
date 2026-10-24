@@ -285,8 +285,8 @@ class Schema(object):
                     LOGGER.info("No next page token in the response. Finishing the extraction")
                     break
                 if new_token == next_page_token:
-                    LOGGER.error("The same next page token was returned twice. Stopping the extraction.")
-                    break
+                    raise RuntimeError(
+                        "The same next page token was returned twice; the sample is incomplete.")
                 next_page_token = new_token
             elif len(data) < self.config["items_per_page"]:
                 LOGGER.info(
