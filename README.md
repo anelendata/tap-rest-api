@@ -236,6 +236,28 @@ that overrides the `window_size_hours` / `window_size_seconds` default; a value 
 }
 ```
 
+**Cursor paging with `{last_update}`** (*new in 0.2.23*): page numbers are offsets
+into a list that can change while the tap reads it. When a record already read is
+updated during the run, it moves to the end of the list, every record behind it shifts
+back one place, and the first record of the next page is never read. Records that
+share one bookmark value can also come back in a different order on each request.
+If the API sorts by the bookmark field and its start filter includes records at
+exactly that value, keep the page fixed and start each request at the last record
+written:
+
+```json
+{
+  "url": ".../items?sort=updated_at&direction=asc&start_datetime={last_update}&per_page={items_per_page}&page=1"
+}
+```
+
+Each request then re-reads the records at the cursor value, so a group of records
+sharing one value can't be split across a page boundary. The tap doesn't write those
+records again. If a full page shares one value, the cursor can't move, and the tap
+raises an error instead of repeating the same request; raise `items_per_page` if the
+API allows it. Check that the API's start filter is inclusive first: with an exclusive
+filter, the records at the cursor value that didn't fit on the page are skipped.
+
 #### Multi-stream bookmark keys
 
 `timestamp_keys`, `datetime_keys`, and `index_keys` (plural) are dictionaries used

@@ -1,5 +1,14 @@
 ## History
 
+### 0.2.23 (2026-11-06)
+- feature: cursor paging on a datetime bookmark (#45). With `{last_update}` in the URL
+  in place of the start bound and a fixed page (`...start_datetime={last_update}&page=1`),
+  each request starts at the last record written, so records moving during the read
+  can't be skipped. Records already written at the cursor value are not written again,
+  and a full page that can't move the cursor raises instead of repeating the request.
+  Page, offset and token paging are unchanged, except that exact duplicates of records
+  already written at the current bookmark value in the run are skipped.
+
 ### 0.2.22 (2026-10-23)
 - fix: token pagination exited 0 on an incomplete extraction. A later page that still
   fails after the retries, or a repeated next page token, now raises, so the process

@@ -191,6 +191,16 @@ class Sync(object):
         first_endpoint = None
         next_page_token = None
 
+        # Cursor paging: a URL like `...start_datetime={last_update}&page=1` moves its
+        # start to the last record written instead of turning pages. With an API whose
+        # start filter is inclusive, each request re-reads the records at the cursor
+        # value. Keep the digests of the records written at the current cursor value so
+        # they are not written again; the set is cleared when the cursor moves. For
+        # page/offset/token paging this only skips exact duplicates within the run.
+        cursor_value = last_update
+        cursor_digests = set()
+        prev_endpoint = None
+
         while True:
             if (self.started_at and global_timeout and
                 datetime.datetime.now() - self.started_at >= datetime.timedelta(seconds=global_timeout)):
@@ -212,6 +222,18 @@ class Sync(object):
                 # Offset/page paging (every page), or the first page in token mode
                 endpoint = get_endpoint(url, tap_stream_id, params)
                 first_endpoint = endpoint
+                # The loop only gets here again after a full page. If the URL didn't
+                # change, the response would be the same page: with cursor paging, a
+                # full page of records all at the cursor value. Fail instead of
+                # requesting it until global_timeout.
+                if endpoint == prev_endpoint:
+                    raise RuntimeError(
+                        f"{tap_stream_id}: the next request is the same as the last one "
+                        f"after a full page, so paging can't move forward. With cursor "
+                        f"paging ({{last_update}} in the URL), more than items_per_page "
+                        f"({self.config['items_per_page']}) records share the value "
+                        f"{last_update}.")
+                prev_endpoint = endpoint
             LOGGER.info("GET %s", endpoint)
 
             rows = []
@@ -246,6 +268,7 @@ class Sync(object):
 
             LOGGER.debug("    Row process started.")
             row_process_started_at = datetime.datetime.now()
+            skipped_at_cursor = 0
             for row in rows:
                 record = get_record(row, record_level)
 
@@ -279,6 +302,10 @@ class Sync(object):
                         f"digest {digest}"
                     )
                     continue
+                if digest in cursor_digests:
+                    # Already written in this run at the current cursor value.
+                    skipped_at_cursor += 1
+                    continue
 
                 if EXTRACT_TIMESTAMP in schema["properties"].keys():
                     extract_tstamp = datetime.datetime.utcnow()
@@ -308,6 +335,14 @@ class Sync(object):
                     record.pop(EXTRACT_TIMESTAMP, None)
                     digest = get_digest_from_record(record)
                     prev_written_record = {"digest": digest}
+
+                    if last_update != cursor_value:
+                        cursor_value = last_update
+                        cursor_digests = set()
+                    cursor_digests.add(digest)
+
+            if skipped_at_cursor:
+                LOGGER.info(f"Skipped {skipped_at_cursor} records already written at {cursor_value}")
 
             row_process_sec = datetime.datetime.now() - row_process_started_at
             LOGGER.debug(f"    row process completed in {row_process_sec} seconds.")
