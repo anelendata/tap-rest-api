@@ -8,6 +8,8 @@
   and a full page that can't move the cursor raises instead of repeating the request.
   Page, offset and token paging are unchanged, except that exact duplicates of records
   already written at the current bookmark value in the run are skipped.
+- python: drop Python 3.9 (end of life; GitHub's latest Ubuntu runners no longer provide it).
+  Requires Python 3.10 or newer; CI tests 3.10-3.12 on the latest Ubuntu, like handoff.
 
 ### 0.2.22 (2026-10-23)
 - fix: token pagination exited 0 on an incomplete extraction. A later page that still
