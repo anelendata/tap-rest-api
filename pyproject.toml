@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tap-rest-api"
-version = "0.2.22"
+version = "0.2.23"
 description = "Singer.io tap for extracting data from any REST API"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 
 authors = [
@@ -18,7 +18,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12"

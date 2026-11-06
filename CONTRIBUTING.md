@@ -56,7 +56,7 @@ Before you submit a pull request, check that it meets these guidelines:
    feature to the list in README.md.
 
 3. The pull request should pass the `tests` GitHub Actions workflow
-   (`pytest tests/unit` on Python 3.9-3.12). Run it locally with
+   (`pytest tests/unit` on Python 3.10-3.12). Run it locally with
    `uv run --project . pytest -q tests/unit`.
 
 ## Releasing (maintainers)
