@@ -1,5 +1,15 @@
 ## History
 
+### 0.2.24 (unreleased)
+- feature: cursor paging reads a bookmark value shared by more records than fit on a
+  page. Tap 0.2.23 raised there, and the next run raised again at the same value. With
+  `tie_urls` set for the stream, the tap reads that value through the tie URL instead
+  (`{tie_datetime}` and `{tie_page}`; the URL returns only records at that value, in a
+  fixed order such as by id), repeats the read until a pass finds nothing new, and then
+  moves the cursor one second on. Without `tie_urls` it raises as before. A timeout
+  during the tie read leaves the cursor at the tie value. New option `tie_max_passes`
+  (default 3).
+
 ### 0.2.23 (2026-11-06)
 - feature: cursor paging on a datetime bookmark (#45). With `{last_update}` in the URL
   in place of the start bound and a fixed page (`...start_datetime={last_update}&page=1`),

@@ -258,6 +258,30 @@ raises an error instead of repeating the same request; raise `items_per_page` if
 API allows it. Check that the API's start filter is inclusive first: with an exclusive
 filter, the records at the cursor value that didn't fit on the page are skipped.
 
+**Ties larger than a page** (*new in 0.2.24*): when more records share one value than
+fit on a page, cursor paging can't move. Set a second URL for the stream that returns
+exactly the records at one value, in a fixed order, paged by number:
+
+```json
+{
+  "urls": {
+    "items": ".../items?sort=updated_at&direction=asc&start_datetime={last_update}&per_page={items_per_page}&page=1"
+  },
+  "tie_urls": {
+    "items": ".../items?sort=id&direction=asc&start_datetime={tie_datetime}&end_datetime={tie_datetime}&per_page={items_per_page}&page={tie_page}"
+  }
+}
+```
+
+When a full page can't move the cursor, the tap reads the tie URL page by page
+(`{tie_page}` from 1), then reads it again. A record that changes during a pass leaves
+the list and the records behind it move up one place, so one can slip onto a page
+already read; the next pass picks it up. The read ends when a pass finds nothing new, or
+fails after `tie_max_passes` (default 3) passes. Then the cursor moves one second past the
+tie value, so bookmark values must be whole seconds, and both bounds of the tie URL must
+be inclusive. The tap fails if the tie URL returns a record at another value. A timeout
+during the tie read leaves the cursor at the tie value, so the next run reads it again.
+
 #### Multi-stream bookmark keys
 
 `timestamp_keys`, `datetime_keys`, and `index_keys` (plural) are dictionaries used
