@@ -176,9 +176,6 @@ class Sync(object):
         global_timeout = self.config.get("global_timeout")
         auth_method = self.config.get("auth_method", "basic")
         assume_sorted = self.config.get("assume_sorted", True)
-        filter_by_schema = self.config.get("filter_by_schema", True)
-        on_invalid_property = self.config.get("on_invalid_property", "force")
-        drop_unknown_properties = self.config.get("drop_unknown_properties", False)
         headers = get_http_headers(self.config)
 
         page_number = params.get("current_page", 0)
@@ -292,26 +289,8 @@ class Sync(object):
             row_process_started_at = datetime.datetime.now()
             skipped_at_cursor = 0
             for row in rows:
-                record = get_record(row, record_level)
-
-                unnest_config = self.config.get("unnest", {})
-                if unnest_config is None:
-                    unnest_config = {}
-                unnest_cols = unnest_config.get(tap_stream_id, [])
-                for u in unnest_cols:
-                    record = unnest(record, u["path"], u["target"])
-
-                if filter_by_schema:
-                    record = Schema.filter_record(
-                            record,
-                            schema,
-                            on_invalid_property=on_invalid_property,
-                            drop_unknown_properties=drop_unknown_properties,
-                            )
-
-                valid, reason = Schema.validate(record, schema)
-                if not valid:
-                    LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
+                record = self._prepare_record(tap_stream_id, row, record_level, schema)
+                if record is None:
                     continue
 
                 # It's important to compare the record before adding EXTRACT_TIMESTAMP
