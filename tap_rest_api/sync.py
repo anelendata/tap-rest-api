@@ -3,6 +3,7 @@ import simplejson as json
 import sys
 import time
 
+import jsonpath_ng
 import singer
 import singer.metrics as metrics
 
@@ -175,9 +176,6 @@ class Sync(object):
         global_timeout = self.config.get("global_timeout")
         auth_method = self.config.get("auth_method", "basic")
         assume_sorted = self.config.get("assume_sorted", True)
-        filter_by_schema = self.config.get("filter_by_schema", True)
-        on_invalid_property = self.config.get("on_invalid_property", "force")
-        drop_unknown_properties = self.config.get("drop_unknown_properties", False)
         headers = get_http_headers(self.config)
 
         page_number = params.get("current_page", 0)
@@ -224,15 +222,36 @@ class Sync(object):
                 first_endpoint = endpoint
                 # The loop only gets here again after a full page. If the URL didn't
                 # change, the response would be the same page: with cursor paging, a
-                # full page of records all at the cursor value. Fail instead of
-                # requesting it until global_timeout.
+                # full page of records all at the cursor value. Read that value through
+                # the stream's tie URL if it has one; otherwise fail instead of
+                # requesting the same page until global_timeout.
                 if endpoint == prev_endpoint:
-                    raise RuntimeError(
-                        f"{tap_stream_id}: the next request is the same as the last one "
-                        f"after a full page, so paging can't move forward. With cursor "
-                        f"paging ({{last_update}} in the URL), more than items_per_page "
-                        f"({self.config['items_per_page']}) records share the value "
-                        f"{last_update}.")
+                    tie_url = (self.config.get("tie_urls") or {}).get(tap_stream_id)
+                    if not tie_url:
+                        raise RuntimeError(
+                            f"{tap_stream_id}: the next request is the same as the last one "
+                            f"after a full page, so paging can't move forward. With cursor "
+                            f"paging ({{last_update}} in the URL), more than items_per_page "
+                            f"({self.config['items_per_page']}) records share the value "
+                            f"{last_update}. Set tie_urls for this stream to read them.")
+                    status, tie_digest = self._drain_tie(
+                        tap_stream_id, tie_url, params, schema, end, last_update,
+                        cursor_digests, counter, raw_output)
+                    if status == "timeout":
+                        # The cursor stays at the tie value, so the next run reads it again.
+                        break
+                    if status == "past_end":
+                        completed = True
+                        break
+                    if tie_digest:
+                        prev_written_record = {"digest": tie_digest}
+                    # Every record at the tie value is read: move the cursor one second on.
+                    last_update = format_datetime(
+                        self.config, parse_datetime_tz(last_update) + datetime.timedelta(seconds=1))
+                    cursor_value = last_update
+                    cursor_digests = set()
+                    prev_endpoint = None
+                    continue
                 prev_endpoint = endpoint
             LOGGER.info("GET %s", endpoint)
 
@@ -270,26 +289,8 @@ class Sync(object):
             row_process_started_at = datetime.datetime.now()
             skipped_at_cursor = 0
             for row in rows:
-                record = get_record(row, record_level)
-
-                unnest_config = self.config.get("unnest", {})
-                if unnest_config is None:
-                    unnest_config = {}
-                unnest_cols = unnest_config.get(tap_stream_id, [])
-                for u in unnest_cols:
-                    record = unnest(record, u["path"], u["target"])
-
-                if filter_by_schema:
-                    record = Schema.filter_record(
-                            record,
-                            schema,
-                            on_invalid_property=on_invalid_property,
-                            drop_unknown_properties=drop_unknown_properties,
-                            )
-
-                valid, reason = Schema.validate(record, schema)
-                if not valid:
-                    LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
+                record = self._prepare_record(tap_stream_id, row, record_level, schema)
+                if record is None:
                     continue
 
                 # It's important to compare the record before adding EXTRACT_TIMESTAMP
@@ -377,6 +378,124 @@ class Sync(object):
             offset_number += len(rows)
 
         return completed, last_update, prev_written_record
+
+    def _drain_tie(self, tap_stream_id, tie_url, params, schema, end, tie_value,
+                   written_at_tie, counter, raw_output):
+        """Read every record whose bookmark value is ``tie_value``, when more of them
+        share it than fit on one cursor page.
+
+        ``tie_url`` must return exactly the records at that value, in an order that
+        doesn't change between requests (for example sorted by id), paged by
+        ``{tie_page}`` (1-based). ``{tie_datetime}`` is the tie value. Example:
+        ``...?sort=id&start_datetime={tie_datetime}&end_datetime={tie_datetime}&page={tie_page}``.
+
+        The records are read again until a full pass finds nothing new. If a record at
+        the tie value changes during a pass, it leaves the list and the records behind
+        it move up one place, so one of them can slip onto a page already read; the
+        next pass reads it. A record that changed is read later at its new value.
+
+        Records already written at the tie value (``written_at_tie``) are not written
+        again. Returns (status, digest of the last record written or None). status is
+        "done", "timeout" (global_timeout reached; the caller must not move the cursor)
+        or "past_end" (the tie value is at or after ``end``; nothing is written).
+        """
+        global_timeout = self.config.get("global_timeout")
+        auth_method = self.config.get("auth_method", "basic")
+        headers = get_http_headers(self.config)
+        per_page = self.config["items_per_page"]
+        max_passes = self.config.get("tie_max_passes", 3)
+        _, bookmark_key = get_bookmark_type_and_key(self.config, tap_stream_id)
+        bookmark_path = jsonpath_ng.parse(bookmark_key)  # parsed once: parsing is slow
+        record_list_level = self.config.get("record_list_level")
+        if isinstance(record_list_level, dict):
+            record_list_level = record_list_level.get(tap_stream_id)
+        record_level = self.config.get("record_level")
+        if isinstance(record_level, dict):
+            record_level = record_level.get(tap_stream_id)
+
+        tie_dt = parse_datetime_tz(tie_value)
+        if end and tie_dt >= parse_datetime_tz(end):
+            LOGGER.info(f"{tap_stream_id}: tie at {tie_value} is at or after the end {end}.")
+            return "past_end", None
+
+        seen = set(written_at_tie)
+        last_digest = None
+        for pass_number in range(1, max_passes + 1):
+            new_in_pass = 0
+            returned = 0
+            tie_page = 1
+            while True:
+                if (self.started_at and global_timeout and
+                        datetime.datetime.now() - self.started_at >= datetime.timedelta(seconds=global_timeout)):
+                    LOGGER.warning(f"Timeout {global_timeout} reached while reading the tie at "
+                                   f"{tie_value}. The cursor stays there.")
+                    return "timeout", None
+                tie_params = dict(params)
+                tie_params.update({"tie_datetime": tie_value, "tie_page": tie_page})
+                endpoint = get_endpoint(tie_url, tap_stream_id, tie_params)
+                LOGGER.info("GET %s (tie at %s, pass %d)", endpoint, tie_value, pass_number)
+                # A failed page can't be skipped here: fail the run, so the bookmark
+                # doesn't move past the tie.
+                rows = generate_request(tap_stream_id, endpoint, auth_method, headers,
+                                        self.config.get("username"), self.config.get("password"))
+                rows = get_record_list(rows, record_list_level)
+                if not isinstance(rows, list):
+                    rows = [rows]
+                returned += len(rows)
+                for row in rows:
+                    record = self._prepare_record(tap_stream_id, row, record_level, schema)
+                    if record is None:
+                        continue
+                    matches = bookmark_path.find(record)
+                    if not matches:
+                        raise KeyError(f"{tap_stream_id}: {bookmark_key} not found in the record")
+                    value = parse_datetime_tz(matches[0].value)
+                    if value != tie_dt:
+                        raise RuntimeError(
+                            f"{tap_stream_id}: tie_urls returned a record at {value}, not at "
+                            f"the tie value {tie_value}. It must return only records at that value.")
+                    digest = get_digest_from_record(record)
+                    if digest in seen:
+                        continue
+                    if EXTRACT_TIMESTAMP in schema["properties"].keys():
+                        record[EXTRACT_TIMESTAMP] = datetime.datetime.now(
+                            datetime.timezone.utc).isoformat()
+                    if raw_output:
+                        sys.stdout.write(json.dumps(record) + "\n")
+                    else:
+                        singer.write_record(tap_stream_id, record)
+                    counter.increment()
+                    seen.add(digest)
+                    last_digest = digest
+                    new_in_pass += 1
+                if len(rows) < per_page:
+                    break
+                tie_page += 1
+            LOGGER.info(f"{tap_stream_id}: tie at {tie_value}, pass {pass_number}: "
+                        f"{returned} returned, {new_in_pass} new.")
+            if pass_number > 1 and new_in_pass == 0:
+                return "done", last_digest
+        raise RuntimeError(
+            f"{tap_stream_id}: the records at {tie_value} were still changing after "
+            f"{max_passes} passes, so the read can't be confirmed complete.")
+
+    def _prepare_record(self, tap_stream_id, row, record_level, schema):
+        """The record from one response row, unnested and filtered by the schema, or
+        None if it fails validation."""
+        record = get_record(row, record_level)
+        unnest_config = self.config.get("unnest", {}) or {}
+        for u in unnest_config.get(tap_stream_id, []):
+            record = unnest(record, u["path"], u["target"])
+        if self.config.get("filter_by_schema", True):
+            record = Schema.filter_record(
+                record, schema,
+                on_invalid_property=self.config.get("on_invalid_property", "force"),
+                drop_unknown_properties=self.config.get("drop_unknown_properties", False))
+        valid, reason = Schema.validate(record, schema)
+        if not valid:
+            LOGGER.warning(f"Skipping the schema invalidated (Reason: {reason}) row:\n  {json.dumps(record)}\n\n")
+            return None
+        return record
 
     def _sync_windowed(self, current_state, tap_stream_id, schema, start, end,
                        bookmark_type, window_seconds, prev_written_record,
