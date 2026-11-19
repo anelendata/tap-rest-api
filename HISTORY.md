@@ -1,6 +1,6 @@
 ## History
 
-### 0.2.24 (unreleased)
+### 0.2.24 (2026-11-19)
 - feature: cursor paging reads a bookmark value shared by more records than fit on a
   page. Tap 0.2.23 raised there, and the next run raised again at the same value. With
   `tie_urls` set for the stream, the tap reads that value through the tie URL instead
